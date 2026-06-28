@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+@layer base {
+  html, body, #root {
+    @apply bg-steel-950 text-ink-100 font-body;
+    min-height: 100dvh;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-steel-900; }
+  ::-webkit-scrollbar-thumb { @apply bg-steel-600 rounded; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-steel-500; }
+}

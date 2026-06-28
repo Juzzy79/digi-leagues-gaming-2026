@@ -1,0 +1,637 @@
+=== PARAGRAPHS ===
+[0] DIGI LEAGUES
+[1] Rebuild Master Plan
+[2] Design System  ·  Database Schema  ·  Phase-by-Phase Build Order
+[3] React + Vite  ·  Supabase  ·  Tailwind CSS  ·  Anti Gravity
+[5] What this document covers
+[6] The complete new design system — colour tokens, typography, spacing, component patterns
+[7] Full Supabase database schema with every table, column, and RLS policy
+[8] 7 build phases in sequence — each phase is a working, testable milestone
+[9] Anti-loop safeguards — explicit patterns to prevent the cascading fetch problem
+[10] Feature flagging for AI verification — so it can be added last without risk
+[13] 01  —  Design System
+[14] The new aesthetic is Halo / UNSC Operations Centre: deep navy-black backgrounds, electric blue as the primary action colour, cyan as the accent highlight, sharp geometric typography, and zero decorative clutter. Every surface should feel like a mission briefing screen.
+[16] Aesthetic Direction
+[18] Colour Palette
+[19] Define these as Tailwind CSS custom tokens in your tailwind.config.js. Replace the old carbon/forest tokens entirely.
+[21] Background Layers
+[23] Blue — Primary Action Colour
+[25] Cyan — Accent / Data Highlight
+[27] Semantic Colours
+[29] Text Hierarchy
+[31] tailwind.config.js — Token Setup
+[32] module.exports = {
+[33]   content: ['./src/**/*.{ts,tsx}'],
+[34]   theme: {
+[35]     extend: {
+[36]       colors: {
+[37]         steel: {
+[38]           400: '#3D5070', 500: '#2A3A54', 600: '#1E2A40',
+[39]           700: '#141C2E', 800: '#0E1420', 900: '#080C14', 950: '#050810',
+[40]         },
+[41]         nexus: {
+[42]           300: '#7EC8FF', 400: '#33BBFF', 500: '#00A8FF',
+[43]           600: '#0087CC', 900: '#001A2E',
+[44]         },
+[45]         pulse: { 400: '#00FFE7', 500: '#00D4C2', 900: '#001A18' },
+[46]         ink:   { 100: '#E8EFF8', 300: '#8BA3C0', 500: '#4A6080', 700: '#253040' },
+[47]         threat:   { 500: '#FF3B3B', 900: '#1A0000' },
+[48]         victory:  { 500: '#00E676', 900: '#001A0A' },
+[49]         duel:     { 500: '#FF7043', 900: '#1A0800' },
+[50]         circuit:  { 500: '#C084FC', 900: '#1A0A2E' },
+[51]         'rank-gold':   '#FFB830',
+[52]         'rank-silver': '#A8B8CC',
+[53]         'rank-bronze': '#CD7F32',
+[54]       },
+[55]       fontFamily: {
+[56]         display: ['Rajdhani', 'Arial', 'sans-serif'],
+[57]         body:    ['Inter', 'Arial', 'sans-serif'],
+[58]         mono:    ['JetBrains Mono', 'Courier New', 'monospace'],
+[59]       },
+[60]     }
+[61]   }
+[62] }
+[64] Typography
+[66] Core Component Patterns
+[67] Cards
+[68] Background: bg-steel-900 border border-steel-600
+[69] Hover: hover:border-nexus-500/40 transition-colors
+[70] Active/selected: border-nexus-500 bg-nexus-900/10
+[71] Padding: p-4 for compact cards, p-6 for content cards
+[72] Radius: rounded-lg (no rounded-2xl — keep it sharp)
+[74] Buttons
+[75] Primary: bg-nexus-500 hover:bg-nexus-400 text-steel-950 font-display font-bold uppercase tracking-wider
+[76] Secondary: bg-steel-700 hover:bg-steel-600 text-ink-100 border border-steel-500
+[77] Danger: bg-threat-500 hover:bg-red-400 text-white font-bold
+[78] Ghost: bg-transparent hover:bg-steel-800 text-ink-300 border border-steel-600
+[79] All buttons: h-10 px-4 rounded text-sm — consistent height, no pill shapes
+[81] Inputs
+[82] bg-steel-700 border border-steel-600 text-ink-100
+[83] Focus: focus:border-nexus-500 focus:ring-1 focus:ring-nexus-500/30 focus:outline-none
+[84] Placeholder: placeholder:text-ink-700
+[85] Height: h-10 — consistent with buttons
+[87] Badges / Pills
+[88] Rank tier badges: inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase
+[89] Status badges: same pattern — colour via semantic tokens (victory-500/20 bg + victory-500 text for wins)
+[90] Never use rounded-full for competitive UI — keep corners at rounded or rounded-sm
+[92] Tables
+[93] Header: bg-steel-800 text-ink-500 uppercase text-[11px] tracking-widest
+[94] Rows: bg-steel-900 divide-y divide-steel-700 hover:bg-steel-800/60
+[95] Current user row: bg-nexus-900/20 border-l-2 border-nexus-500
+[97] MMR Tier Colour Mapping
+[100] 02  —  Supabase Database Schema
+[101] Create a fresh Supabase project. Run the following SQL in the Supabase SQL editor in order. Each block is self-contained.
+[103] Run these blocks in sequence — later blocks reference tables from earlier ones. Do not skip or reorder.
+[105] Block 1 — Profiles (extends auth.users)
+[106] Block 1 — profiles table
+[107] create table public.profiles (
+[108]   id           uuid primary key references auth.users(id) on delete cascade,
+[109]   username     text unique not null,
+[110]   avatar_url   text,
+[111]   banner_url   text,
+[112]   main_game    text default 'General',
+[113]   mmr          integer not null default 1000,
+[114]   wins         integer not null default 0,
+[115]   losses       integer not null default 0,
+[116]   win_rate     numeric(5,2) not null default 0,
+[117]   current_streak integer not null default 0,
+[118]   reputation_score integer not null default 50,
+[119]   circuit_points integer not null default 0,
+[120]   is_admin     boolean not null default false,
+[121]   is_trusted   boolean not null default false,
+[122]   last_active  timestamptz default now(),
+[123]   created_at   timestamptz default now()
+[124] );
+[126] -- Auto-create profile on signup
+[127] create or replace function public.handle_new_user()
+[128] returns trigger as $$
+[129] begin
+[130]   insert into public.profiles (id, username)
+[131]   values (new.id, new.raw_user_meta_data->>'username');
+[132]   return new;
+[133] end;
+[134] $$ language plpgsql security definer;
+[136] create trigger on_auth_user_created
+[137]   after insert on auth.users
+[138]   for each row execute procedure public.handle_new_user();
+[140] -- RLS
+[141] alter table public.profiles enable row level security;
+[142] create policy "Public read" on profiles for select using (true);
+[143] create policy "Own write" on profiles for update using (auth.uid() = id);
+[145] Block 2 — Challenges (Duels)
+[146] Block 2 — challenges table
+[147] create table public.challenges (
+[148]   id              uuid primary key default gen_random_uuid(),
+[149]   challenger_id   uuid not null references profiles(id),
+[150]   challenger_name text not null,
+[151]   opponent_id     uuid not null references profiles(id),
+[152]   opponent_name   text not null,
+[153]   game            text not null default 'General',
+[154]   rules           text,
+[155]   duration_hours  integer not null default 24,
+[156]   end_time        timestamptz not null,
+[157]   status          text not null default 'pending'
+[158]                   check (status in ('pending','accepted','completed','declined','expired')),
+[159]   winner_id       uuid references profiles(id),
+[160]   created_at      timestamptz default now()
+[161] );
+[163] alter table public.challenges enable row level security;
+[164] create policy "Read own challenges" on challenges for select
+[165]   using (auth.uid() = challenger_id or auth.uid() = opponent_id);
+[166] create policy "Create challenge" on challenges for insert
+[167]   with check (auth.uid() = challenger_id);
+[168] create policy "Update own challenge" on challenges for update
+[169]   using (auth.uid() = challenger_id or auth.uid() = opponent_id);
+[171] Block 3 — Rivalries (Nemesis + Dog Tags)
+[172] Block 3 — rivalries table
+[173] create table public.rivalries (
+[174]   id              uuid primary key default gen_random_uuid(),
+[175]   player_id       uuid not null references profiles(id),
+[176]   rival_id        uuid not null references profiles(id),
+[177]   player_wins     integer not null default 0,
+[178]   rival_wins      integer not null default 0,
+[179]   net_score       integer not null default 0,  -- player_wins - rival_wins
+[180]   is_nemesis      boolean not null default false,
+[181]   dog_tag_claimed boolean not null default false,
+[182]   updated_at      timestamptz default now(),
+[183]   unique (player_id, rival_id)
+[184] );
+[186] alter table public.rivalries enable row level security;
+[187] create policy "Public read" on rivalries for select using (true);
+[188] create policy "System write" on rivalries for all using (true)
+[189]   with check (true);  -- controlled via service role in functions
+[191] Block 4 — Match History
+[192] Block 4 — match_history table
+[193] create table public.match_history (
+[194]   id           uuid primary key default gen_random_uuid(),
+[195]   user_id      uuid not null references profiles(id),
+[196]   game         text not null,
+[197]   result       text not null check (result in ('Win','Loss')),
+[198]   score        integer,
+[199]   mmr_change   integer not null default 0,
+[200]   mmr_after    integer not null,
+[201]   challenge_id uuid references challenges(id),
+[202]   proof_url    text,
+[203]   ai_verified  boolean default false,
+[204]   created_at   timestamptz default now()
+[205] );
+[207] alter table public.match_history enable row level security;
+[208] create policy "Public read" on match_history for select using (true);
+[209] create policy "Own insert" on match_history for insert
+[210]   with check (auth.uid() = user_id);
+[212] Block 5 — Activity Feed
+[213] Block 5 — activity_feed table
+[214] create table public.activity_feed (
+[215]   id           uuid primary key default gen_random_uuid(),
+[216]   user_id      uuid references profiles(id),
+[217]   username     text not null,
+[218]   user_avatar  text,
+[219]   event_type   text not null,
+[220]   description  text not null,
+[221]   proof_url    text,
+[222]   created_at   timestamptz default now()
+[223] );
+[225] -- Keep feed lean — auto-delete entries older than 30 days
+[226] create index on activity_feed (created_at desc);
+[228] alter table public.activity_feed enable row level security;
+[229] create policy "Public read" on activity_feed for select using (true);
+[230] create policy "Own insert" on activity_feed for insert
+[231]   with check (auth.uid() = user_id);
+[233] Block 6 — Messaging
+[234] Block 6 — messages table
+[235] create table public.messages (
+[236]   id         uuid primary key default gen_random_uuid(),
+[237]   channel    text not null,
+[238]   sender_id  uuid not null references profiles(id),
+[239]   sender_name text not null,
+[240]   content    text not null,
+[241]   is_system  boolean default false,
+[242]   created_at timestamptz default now()
+[243] );
+[245] create index on messages (channel, created_at desc);
+[247] alter table public.messages enable row level security;
+[248] create policy "Public read" on messages for select using (true);
+[249] create policy "Auth insert" on messages for insert
+[250]   with check (auth.uid() = sender_id);
+[252] Block 7 — Tournaments
+[253] Block 7 — tournaments + registrations
+[254] create table public.tournaments (
+[255]   id           uuid primary key default gen_random_uuid(),
+[256]   circuit_id   uuid references circuits(id),
+[257]   title        text not null,
+[258]   game         text not null,
+[259]   tier         text not null default 'Open',
+[260]   status       text not null default 'upcoming'
+[261]                check (status in ('upcoming','active','completed')),
+[262]   max_players  integer default 16,
+[263]   prize_info   text,
+[264]   banner_url   text,
+[265]   start_date   date,
+[266]   created_by   uuid references profiles(id),
+[267]   created_at   timestamptz default now()
+[268] );
+[270] create table public.tournament_registrations (
+[271]   id            uuid primary key default gen_random_uuid(),
+[272]   tournament_id uuid not null references tournaments(id),
+[273]   user_id       uuid not null references profiles(id),
+[274]   registered_at timestamptz default now(),
+[275]   unique (tournament_id, user_id)
+[276] );
+[278] alter table public.tournaments enable row level security;
+[279] create policy "Public read" on tournaments for select using (true);
+[280] create policy "Admin write" on tournaments for all
+[281]   using (exists (select 1 from profiles where id = auth.uid() and is_admin = true));
+[283] alter table public.tournament_registrations enable row level security;
+[284] create policy "Public read" on tournament_registrations for select using (true);
+[285] create policy "Own register" on tournament_registrations for insert
+[286]   with check (auth.uid() = user_id);
+[288] Block 8 — Circuits / Seasons
+[289] Block 8 — circuits table (run BEFORE Block 7)
+[290] -- Run BEFORE Block 7 (tournaments references circuits)
+[291] create table public.circuits (
+[292]   id          uuid primary key default gen_random_uuid(),
+[293]   name        text not null,
+[294]   season      text not null,
+[295]   region      text default 'Global',
+[296]   banner_url  text,
+[297]   prize_pool  text,
+[298]   start_date  date,
+[299]   end_date    date,
+[300]   is_active   boolean default true,
+[301]   created_at  timestamptz default now()
+[302] );
+[304] alter table public.circuits enable row level security;
+[305] create policy "Public read" on circuits for select using (true);
+[306] create policy "Admin write" on circuits for all
+[307]   using (exists (select 1 from profiles where id = auth.uid() and is_admin = true));
+[309] Block 8 must be run BEFORE Block 7. Circuits table must exist before the tournaments foreign key can reference it.
+[311] Correct SQL Execution Order
+[312] Block 1 — profiles
+[313] Block 8 — circuits  ← before tournaments
+[314] Block 7 — tournaments + registrations
+[315] Block 2 — challenges
+[316] Block 3 — rivalries
+[317] Block 4 — match_history
+[318] Block 5 — activity_feed
+[319] Block 6 — messages
+[322] 03  —  Anti-Loop Architecture
+[323] The previous app was destroyed by cascading data fetches — useEffects that triggered state updates that triggered more useEffects. This section defines the patterns to prevent that from ever happening again.
+[325] NEVER put a state setter inside a useEffect whose dependency array contains the same state. NEVER fetch inside a component that re-renders every time its parent re-renders without memo protection.
+[327] Rule 1 — Single Data Layer
+[328] All Supabase calls live in one place: src/services/. Components never import supabase directly.
+[329] Folder structure — services layer
+[330] src/
+[331]   services/
+[332]     supabase.ts          ← client init only
+[333]     authService.ts       ← login, register, session
+[334]     profileService.ts    ← getProfile, updateProfile
+[335]     challengeService.ts  ← getChallenges, createChallenge
+[336]     matchService.ts      ← submitMatch, getHistory
+[337]     feedService.ts       ← getFeed (one-shot, no realtime)
+[338]     messageService.ts    ← getMessages, sendMessage
+[339]     rivalryService.ts    ← getRivalries, updateRivalry
+[341] Rule 2 — useEffect Dependency Rules
+[342] Every useEffect that fetches data must follow this exact pattern:
+[343] // ✅ SAFE — fetches once when ID changes, no state in deps
+[344] useEffect(() => {
+[345]   if (!userId) return;
+[346]   let cancelled = false;
+[347]   fetchProfile(userId).then(data => {
+[348]     if (!cancelled) setProfile(data);
+[349]   });
+[350]   return () => { cancelled = true; };
+[351] }, [userId]);  // ← primitive value, not an object
+[353] // ❌ DANGEROUS — object in deps causes infinite loop
+[354] useEffect(() => {
+[355]   fetchSomething(user);  // user object changes ref every render
+[356] }, [user]);
+[358] // ✅ FIX — extract the primitive
+[359] useEffect(() => {
+[360]   fetchSomething(user.id);
+[361] }, [user.id]);
+[363] Rule 3 — No Polling in Components
+[364] The old messaging used setInterval inside components — this caused multiple intervals to stack. Use a single polling hook instead:
+[365] // src/hooks/usePolling.ts
+[366] export function usePolling(fn: () => void, intervalMs: number) {
+[367]   useEffect(() => {
+[368]     fn(); // initial call
+[369]     const id = setInterval(fn, intervalMs);
+[370]     return () => clearInterval(id); // always clean up
+[371]   }, []); // ← empty deps: runs once, cleans up on unmount
+[372] }
+[374] // Usage in Messaging.tsx
+[375] const loadMessages = useCallback(() => {
+[376]   fetchMessages(channel).then(setMessages);
+[377] }, [channel]);
+[379] usePolling(loadMessages, 5000);
+[381] Rule 4 — Auth State in Context Only
+[382] Auth state must live in a single React Context at the root. No component fetches session state directly.
+[383] // src/context/AuthContext.tsx
+[384] const AuthContext = createContext<AuthContextType>(null);
+[386] export function AuthProvider({ children }) {
+[387]   const [user, setUser] = useState(null);
+[388]   const [profile, setProfile] = useState(null);
+[389]   const [loading, setLoading] = useState(true);
+[391]   useEffect(() => {
+[392]     // Get initial session
+[393]     supabase.auth.getSession().then(({ data }) => {
+[394]       setUser(data.session?.user ?? null);
+[395]       setLoading(false);
+[396]     });
+[398]     // Listen for changes — fires once on mount
+[399]     const { data: { subscription } } = supabase.auth.onAuthStateChange(
+[400]       (event, session) => setUser(session?.user ?? null)
+[401]     );
+[402]     return () => subscription.unsubscribe();
+[403]   }, []); // ← empty deps, runs once
+[405]   // Fetch profile separately, triggered by user.id
+[406]   useEffect(() => {
+[407]     if (!user?.id) { setProfile(null); return; }
+[408]     fetchProfile(user.id).then(setProfile);
+[409]   }, [user?.id]); // ← primitive, safe
+[411]   return <AuthContext.Provider value={{ user, profile, loading }}>
+[412]     {children}
+[413]   </AuthContext.Provider>;
+[414] }
+[416] Rule 5 — Component Checklist
+[417] Before writing any component that fetches data, verify:
+[418] deps array contains only primitive values (string, number, boolean) — not objects or arrays
+[419] every fetch has a cancelled guard or cleanup function
+[420] no setInterval without a matching clearInterval in the cleanup return
+[421] no fetch triggered by a state variable that the same fetch also sets
+[422] if the component is inside a list (.map()), all fetches use the item's id as the dep, not the item object
+[425] 04  —  Build Phases
+[426] Seven phases. Each phase ends with a working, testable app. Never start a new phase until the current one is stable. The AI verification feature is deliberately last — it is additive and cannot break anything else.
+[431] By the end of Phase 1 you can log in, log out, and see a placeholder dashboard. Nothing else works yet. This phase is entirely infrastructure.
+[433] Tasks
+[435] Phase 1 complete when: you can register, the profile auto-creates via trigger, you can log in and see the shell, you can log out.
+[439] Full profile page for self and other players. Edit avatar/banner URL. Display MMR tier with colour. This phase defines the identity layer the whole app builds on.
+[441] Tasks
+[443] Phase 2 complete when: own profile is editable and saves to Supabase. Other profiles are viewable. Tier badge renders correctly.
+[447] The heart of the app. Players submit match results manually (no screenshot required yet), MMR updates, match history records the entry, and the activity feed gets a write. This phase makes the app actually functional for tracking competitive games.
+[449] AI verification is NOT in this phase. Players submit their own score and result (win/loss). Proof screenshot upload is optional in Phase 7. This keeps Phase 3 simple and reliable.
+[451] Tasks
+[453] Phase 3 complete when: submitting a result updates MMR, writes to history, and writes to the feed. The core competitive loop works end-to-end.
+[457] With real data flowing, now build the pages that display it. Community shows all players. Leaderboard ranks them. Activity Feed shows recent events. Dashboard ties it all together.
+[459] Tasks
+[461] Phase 4 complete when: Community, Leaderboard, and Dashboard are all populated with real data from Supabase.
+[465] The most unique feature set. Duels are challenges sent between players. Nemesis status triggers when one player achieves net +3 wins against another. Dog Tags are claimed from those nemesis victories. This phase brings the competitive edge.
+[467] Nemesis Logic (important — read before building)
+[469] Tasks
+[471] Phase 5 complete when: challenges can be sent, accepted, and resolved. Rivalry scores update correctly. Nemesis status triggers at net +3.
+[475] Circuits are seasons that contain tournaments. Admin users create circuits and tournaments. Regular players register and view standings. This phase is primarily display + admin tooling.
+[477] Tasks
+[479] Phase 6 complete when: circuits and tournaments are viewable. Admin can create them. Players can register.
+[483] The final phase adds messaging, documentation, and the optional AI screenshot verification. Everything in this phase is additive — it cannot break the existing functionality.
+[485] Tasks
+[487] Phase 7 complete = app is done. You have a fully functional Digi Leagues rebuild with the new design system and no cascade loops.
+[490] 05  —  Quick Reference
+[492] File Structure at End of Build
+[493] src/
+[494]   components/
+[495]     Button.tsx
+[496]     TierBadge.tsx
+[497]     EmptyState.tsx
+[498]     DogTag.tsx
+[499]   context/
+[500]     AuthContext.tsx
+[501]   hooks/
+[502]     usePolling.ts
+[503]   pages/
+[504]     Auth.tsx
+[505]     Dashboard.tsx
+[506]     Profile.tsx
+[507]     Community.tsx
+[508]     Leaderboard.tsx
+[509]     Tournaments.tsx
+[510]     Circuit.tsx
+[511]     Messaging.tsx
+[512]     ResultSubmission.tsx
+[513]     FieldManual.tsx
+[514]     Admin.tsx
+[515]   services/
+[516]     supabase.ts
+[517]     authService.ts
+[518]     profileService.ts
+[519]     rankingService.ts
+[520]     matchService.ts
+[521]     feedService.ts
+[522]     messageService.ts
+[523]     challengeService.ts
+[524]     rivalryService.ts
+[525]     tournamentService.ts
+[526]     circuitService.ts
+[527]   App.tsx
+[528]   main.tsx
+[529]   index.css
+[531] Env Variables (.env)
+[532] VITE_SUPABASE_URL=https://your-project.supabase.co
+[533] VITE_SUPABASE_ANON_KEY=your-anon-key
+[534] VITE_GEMINI_API_KEY=your-gemini-key   # only needed in Phase 7
+[535] VITE_AI_VERIFY_ENABLED=false          # set to true only when ready
+[537] MMR Calculation Reference
+[539] Tier Thresholds
+[541] Route Map
+[544] Good luck with the rebuild. Build one phase at a time. Never move forward until the current phase is stable.
+
+=== TABLES ===
+--- Table 0 ---
+Vibe | UNSC Operations Centre — military sci-fi, mission-critical precision
+Mood | Tense, competitive, prestigious — not playful or casual
+Lighting | Dark room with glowing screens — deep blacks lit by blue/cyan
+Motion | Fast and purposeful — snap transitions, no floating animations
+Typography | Geometric, uppercase labels with wide tracking — clean and authoritative
+Inspiration | Halo Waypoint, Valorant agent select, NVIDIA control panel
+--- Table 1 ---
+ | steel-950 | #050810 | Page background — the void behind everything
+ | steel-900 | #080C14 | Primary surface — cards, panels, modals
+ | steel-800 | #0E1420 | Elevated surface — header bars, sidebars
+ | steel-700 | #141C2E | Input backgrounds, table rows
+ | steel-600 | #1E2A40 | Borders, dividers, subtle separators
+ | steel-500 | #2A3A54 | Hover states, active table rows
+ | steel-400 | #3D5070 | Muted borders on hover
+--- Table 2 ---
+ | nexus-500 | #00A8FF | Primary buttons, active states, links, focus rings
+ | nexus-400 | #33BBFF | Button hover, highlighted text
+ | nexus-300 | #7EC8FF | Secondary text on dark backgrounds, labels
+ | nexus-600 | #0087CC | Button pressed state
+ | nexus-900 | #001A2E | Tinted card backgrounds, alert fills
+--- Table 3 ---
+ | pulse-400 | #00FFE7 | MMR numbers, scores, key metrics — glowing data
+ | pulse-500 | #00D4C2 | Secondary accent, active badges
+ | pulse-900 | #001A18 | Tinted badge backgrounds
+--- Table 4 ---
+ | rank-gold | #FFB830 | Rank 1, gold tier, champion events
+ | rank-silver | #A8B8CC | Rank 2, silver tier
+ | rank-bronze | #CD7F32 | Rank 3, bronze tier
+ | threat-500 | #FF3B3B | Losses, errors, nemesis indicators, danger
+ | threat-900 | #1A0000 | Error/danger surface fills
+ | victory-500 | #00E676 | Wins, success states, positive MMR change
+ | victory-900 | #001A0A | Success surface fills
+ | duel-500 | #FF7043 | Duel challenges, pending states, urgency
+ | circuit-500 | #C084FC | Circuit / season events, prestige
+--- Table 5 ---
+ | ink-100 | #E8EFF8 | Headings, player names, primary content
+ | ink-300 | #8BA3C0 | Body text, descriptions, secondary content
+ | ink-500 | #4A6080 | Labels, placeholders, timestamps, muted info
+ | ink-700 | #253040 | Disabled states, ghost text
+--- Table 6 ---
+Display font | Rajdhani — wide, geometric, military. Used for all headings, rank names, usernames, scores. Free on Google Fonts.
+Body font | Inter — clean, legible at small sizes. Used for all body text, labels, descriptions.
+Mono font | JetBrains Mono — for MMR numbers, scores, IDs, code-like data. Creates a "stat readout" feel.
+Heading style | font-display font-bold uppercase tracking-wider — always uppercase for headings and labels
+Body style | font-body — sentence case, normal weight for readable prose
+Numbers/Stats | font-mono — all game statistics, MMR, scores, win rates displayed in mono
+--- Table 7 ---
+Iron | 800–999     #8B9BB0 — muted steel
+Bronze | 1000–1199   #CD7F32 — bronze
+Silver | 1200–1399   #A8B8CC — silver
+Gold | 1400–1599   #FFB830 — gold
+Platinum | 1600–1799   #00D4C2 — pulse cyan
+Diamond | 1800–1999   #33BBFF — nexus blue
+Nexus Elite | 2000+       #C084FC — circuit purple (rarest)
+--- Table 8 ---
+Phase 1 | Foundation — Vite project, Tailwind, Supabase, Auth, design tokens
+Phase 2 | Profiles — view profile, edit profile, avatar/banner
+Phase 3 | Core Loop — submit match result, MMR calculation, match history
+Phase 4 | Social Layer — Community page, Leaderboard, Activity Feed
+Phase 5 | Rivalry System — Duels, Nemesis, Dog Tags
+Phase 6 | Tournaments & Circuits — seasons, brackets, registration
+Phase 7 | Comms + Polish — Messaging, Field Manual, Admin panel, AI verification
+--- Table 9 ---
+PHASE 1  ·  Foundation
+Vite · Tailwind · Supabase · Auth · Design tokens · App shell
+--- Table 10 ---
+# | Task | Notes / Gotchas | P
+1.01 | Scaffold: npm create vite@latest digi-leagues -- --template react-ts | Use React + TypeScript template | P1
+1.02 | Install dependencies: tailwindcss postcss autoprefixer react-router-dom @supabase/supabase-js lucide-react | Also install: clsx for conditional classes | P1
+1.03 | Configure Tailwind with the full colour token set from Section 01 | Copy the tailwind.config.js from this doc exactly | P1
+1.04 | Add Google Fonts to index.html: Rajdhani (display), Inter (body), JetBrains Mono | Use weights 400, 600, 700 for Rajdhani; 400, 500 for Inter | P1
+1.05 | Set global CSS: bg-steel-950 text-ink-100 font-body on html/body | In index.css — establishes the dark base | P1
+1.06 | Create new Supabase project, copy URL and anon key to .env | VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY | P1
+1.07 | Run database SQL blocks in order: Block 1 (profiles), then 8, 7, 2, 3, 4, 5, 6 | See Section 02 for full SQL and execution order | P1
+1.08 | Create src/services/supabase.ts — client init only | createClient(url, key) — nothing else in this file | P1
+1.09 | Create src/services/authService.ts — login, register, logout, getSession | Register calls supabase.auth.signUp with { data: { username } } | P1
+1.10 | Create src/context/AuthContext.tsx using the pattern from Section 03 Rule 4 | Two useEffects: one for session, one for profile (user.id dep) | P1
+1.11 | Create Auth.tsx page — login + register form, styled with new tokens | Two fields for login (email, password), three for register (add username) | P1
+1.12 | Create App.tsx with React Router: / redirects based on auth state, /auth for login, /app/* for protected routes | Use AuthContext loading state to prevent flash of wrong page | P1
+1.13 | Create placeholder Dashboard.tsx — just a heading and "Welcome, {username}" | Real dashboard built in Phase 4 | P1
+1.14 | Create the app shell: sidebar nav + top bar with username/avatar | Nav items: Dashboard, Profile, Leaderboard, Community, Tournaments, Messages. All link to placeholder pages. | P1
+1.15 | Create Button.tsx component with all four variants from design system | primary / secondary / danger / ghost — accept size sm/md/lg and isLoading prop | P1
+1.16 | Test: register a new account, verify profile row created in Supabase, log out, log back in | Check Supabase auth.users table AND profiles table both have rows | P1
+--- Table 11 ---
+PHASE 2  ·  Profiles
+View profile · Edit profile · Avatar · Banner · MMR display
+--- Table 12 ---
+# | Task | Notes / Gotchas | P
+2.01 | Create src/services/profileService.ts — getProfile(userId), updateProfile(userId, updates) | getProfile: single .select() by id. updateProfile: .update() where id = userId | P1
+2.02 | Create src/services/rankingService.ts — getTier(mmr), getNextTier(mmr), calculateMMRChange(isWin, opponentMMR) | getTier returns { name, color, min, max } based on the tier table from Section 01 | P1
+2.03 | Build Profile.tsx — banner image, avatar, username, tier badge, stats row (wins/losses/win rate/MMR) | Accept userId prop — fetches its own profile data. Use dep [userId] not [userObject] | P1
+2.04 | Add edit mode to Profile.tsx — inline fields for avatar URL and banner URL (no modal) | Toggle isEditMode state. Show input fields inline below the header card. | P1
+2.05 | Add DEFAULT_BANNERS array — 5 preset Unsplash image URLs for banner selection | Render as clickable thumbnail grid in edit mode | P2
+2.06 | Create TierBadge component — takes mmr prop, renders coloured badge with tier name in mono font | Used on Profile, Leaderboard, Community cards | P1
+2.07 | Add match history section to Profile — empty state for now, will populate in Phase 3 | Just render the section header and a "No matches yet" message | P2
+2.08 | Test: visit your own profile, edit and save avatar URL, confirm it persists on page refresh | Also test visiting another user's profile by ID — should be read-only | P1
+--- Table 13 ---
+PHASE 3  ·  Core Loop
+Submit result · MMR calculation · Match history · Activity feed write
+--- Table 14 ---
+# | Task | Notes / Gotchas | P
+3.01 | Create src/services/matchService.ts — submitMatch(userId, matchData), getMatchHistory(userId) | submitMatch writes to match_history AND updates profiles (mmr, wins, losses, win_rate, streak) | P1
+3.02 | Create submitMatch as a Supabase Edge Function OR a client-side transaction using .rpc() | Simplest: client-side — insert match_history row, then update profiles row, then insert activity_feed row. Wrap in try/catch. | P1
+3.03 | Build ResultSubmission.tsx — game name input, win/loss toggle, optional score number, submit button | Clean, simple form. Two states: idle and submitting. No genre detection yet. | P1
+3.04 | Implement MMR calculation in rankingService.ts — calculateMMRChange(isWin, currentMMR, performanceScore) | Base: +25 win, -20 loss. Scale by ±5 based on performance score if provided. Cap at +40/-35. | P1
+3.05 | After submit: update profile MMR in Supabase, write activity_feed row, write match_history row | Order matters: write history first, then update profile. If profile update fails, the history record stays as an audit trail. | P1
+3.06 | Wire match history display into Profile.tsx — fetch getMatchHistory(userId) and render the rows | Each row: game name, W/L badge, MMR change (+/-), date. Newest first. | P1
+3.07 | Add a "Submit Result" button to the app shell nav (prominent placement) | Opens ResultSubmission as a route /app/submit, not a modal | P1
+3.08 | Test: submit a win, confirm MMR increases, match history shows row, activity feed has entry | Also test a loss and verify the streak resets to 0 | P1
+--- Table 15 ---
+PHASE 4  ·  Social Layer
+Community · Leaderboard · Activity Feed · Dashboard
+--- Table 16 ---
+# | Task | Notes / Gotchas | P
+4.01 | Create src/services/feedService.ts — getFeed(limit): one-shot fetch, no realtime | SELECT * FROM activity_feed ORDER BY created_at DESC LIMIT 20. No subscription. | P1
+4.02 | Build Community.tsx — grid of player cards with compact design (p-4, w-14 avatar, pill badges) | Fetch all profiles once on mount. Search filters client-side — no re-fetch on search. | P1
+4.03 | Build Leaderboard.tsx — sortable table with podium header for top 3 | Fetch all profiles once, sort client-side. Game filter is also client-side. | P1
+4.04 | Build ActivityFeed component — renders feed events, auto-refreshes every 30s using usePolling hook from Section 03 | Use the usePolling pattern. Interval: 30000ms — not 5000ms. Feed does not need to be instant. | P1
+4.05 | Build Dashboard.tsx — 5-col grid: 2 cols for stats/rivalry/quicklinks, 3 cols for activity feed | Rivalry Radar: fetch profiles once, show the 2 players above and 2 below current user by MMR | P1
+4.06 | Add "View Profile" navigation from Community cards and Leaderboard rows → Profile page with userId param | Use React Router: navigate to /app/profile/:userId | P1
+4.07 | Test: verify Community shows all users, Leaderboard sorts correctly, Dashboard activity feed updates | Add a second test account to check multi-player display | P1
+--- Table 17 ---
+PHASE 5  ·  Rivalry System
+Daily Duels · Nemesis · Dog Tags · Challenge flow
+--- Table 18 ---
+Tracking | The rivalries table tracks player_wins, rival_wins, and net_score per pair. Each pair has TWO rows — (A→B) and (B→A).
+Nemesis crown | When net_score reaches +3, is_nemesis = true. Player A becomes B's nemesis.
+Dog Tag | When is_nemesis becomes true AND dog_tag_claimed = false, a dog tag entry is created on the nemesis player's profile.
+Redemption | B wins 2 consecutive duels against A → net_score resets to 0, is_nemesis = false, dog_tag_claimed = false.
+3-limit rule | Max 3 challenges per 24h per pair. Track in challenges table — count rows in last 24h.
+--- Table 19 ---
+# | Task | Notes / Gotchas | P
+5.01 | Create src/services/rivalryService.ts — getRivalries(userId), updateRivalryAfterMatch(winnerId, loserId) | updateRivalryAfterMatch: upsert both directions of the rivalry pair, recalculate net_score, check nemesis threshold | P1
+5.02 | Create src/services/challengeService.ts — getChallenges(userId), createChallenge(data), respondToChallenge(id, accept/decline), canChallenge(challengerId, opponentId) | canChallenge: count rows in last 24h — if >= 3, return { allowed: false } | P1
+5.03 | Add challenge button to Profile.tsx for other players — renders inline challenge form (not modal) | Shows game input, optional rules textarea, send button. Collapses after send. | P1
+5.04 | Add pending challenges panel to Dashboard.tsx — shows incoming duels with Accept/Decline buttons | Fetch challenges where opponent_id = currentUser.id AND status = pending | P1
+5.05 | When a duel result is submitted, call updateRivalryAfterMatch to update the rivalries table | Link duel result to challenges table via challenge_id on match_history | P1
+5.06 | Add nemesis display to Profile.tsx — if another player has is_nemesis=true against this user, show their avatar in the banner area | Query rivalries WHERE rival_id = profileUserId AND is_nemesis = true | P2
+5.07 | Add Dog Tags display to Profile.tsx — render DogTag components for all claimed tags | Query rivalries WHERE player_id = profileUserId AND dog_tag_claimed = true | P2
+5.08 | Add streak tracking — after each match, if result = Win increment current_streak else set to 0 on profiles table | Flame icon appears on profile/leaderboard when streak >= 3 | P2
+5.09 | Test: challenge another account, accept the challenge, submit a result for it, verify rivalry row updates | Test the 3-limit rule by trying to create a 4th challenge in 24h | P1
+--- Table 20 ---
+PHASE 6  ·  Tournaments & Circuits
+Seasons · Tournament listing · Registration · Circuit standings
+--- Table 21 ---
+# | Task | Notes / Gotchas | P
+6.01 | Create src/services/tournamentService.ts — getTournaments(), getTournament(id), registerForTournament(tournamentId, userId) | getTournaments: fetch all with registration count. registerForTournament: insert into tournament_registrations | P1
+6.02 | Create src/services/circuitService.ts — getCircuits(), getCircuit(id), updateCircuit(id, data) | getCircuit: fetch circuit + its tournaments in one join query | P1
+6.03 | Build Tournaments.tsx — list of tournament cards with status badges, register button, player count | Group by status: active → upcoming → completed | P1
+6.04 | Build Circuit.tsx — hero banner, tournament roadmap timeline, season standings table | Standings: order profiles by circuit_points DESC | P1
+6.05 | Build Admin panel (admin-only route) — create/edit tournaments and circuits, set is_admin on users | Guard with: if (!currentUser.is_admin) return <Navigate to="/app" /> | P2
+6.06 | Mark your own account as admin directly in Supabase table editor (UPDATE profiles SET is_admin = true WHERE id = 'your-id') | Do this before testing admin features | P1
+6.07 | Test: create a circuit, create a tournament inside it, register with a test account, verify registration appears | Check that non-admin cannot access admin route | P1
+--- Table 22 ---
+PHASE 7  ·  Comms + Polish
+Messaging · Field Manual · AI Verification (optional) · Final polish
+--- Table 23 ---
+# | Task | Notes / Gotchas | P
+7.01 | Build Messaging.tsx — channel sidebar (w-48) + message pane at h-[calc(100dvh-8rem)] | Use usePolling(loadMessages, 5000) for the message pane. Channels: General, LFG-Ranked, Tournaments, Strategy | P1
+7.02 | Create src/services/messageService.ts — getMessages(channel, limit), sendMessage(channel, content, sender) | getMessages: SELECT last 50 messages for channel. sendMessage: INSERT then re-fetch. | P1
+7.03 | Add DM support to Messaging — when onMessagePlayer(username) is called, set channel to the username as a DM channel name | DM channel name convention: dm_[sortedIds] e.g. dm_abc123_xyz789 | P2
+7.04 | Build FieldManual.tsx — static content page with sidebar nav and 5 sections | No data fetching needed. Pure static content with the 5 rule sections from original app. | P2
+7.05 | AI Verification (optional): add screenshot upload to ResultSubmission.tsx — file → base64 → Gemini API call → confidence score displayed | Wrap in a feature flag: VITE_AI_VERIFY_ENABLED=true. If false, upload button is hidden. Hybrid mode only: player enters result manually, AI just confirms. | P3
+7.06 | If adding AI verification: prompt Gemini to return JSON only with fields: gameDetected, isWin, score, confidence (0–1) | Gemini model: gemini-1.5-flash. Parse result, show confidence meter. If confidence < 0.7, show warning but still allow submit. | P3
+7.07 | Polish pass: add loading skeletons to all data-fetching pages | Simple pulsing bg-steel-700 placeholder divs — no library needed | P2
+7.08 | Polish pass: add empty states to all list pages (Community, Leaderboard, Feed) | Use a consistent empty state component: icon + heading + subtext | P2
+7.09 | Polish pass: add page transition animation — opacity-0 → opacity-100 on route change | CSS only: each page root div gets animate-in fade-in duration-300 | P3
+7.10 | Final test: run through the full loop with two accounts — register, submit results, send challenge, resolve duel, check leaderboard | The full smoke test | P1
+--- Table 24 ---
+Base win | +25 MMR
+Base loss | -20 MMR
+Duel win bonus | +5 extra (total +30)
+High score bonus | +5 if score in top 20% of your history
+Streak bonus | +3 per active win streak (max +9 at 3+ streak)
+Max gain per match | 40 MMR
+Max loss per match | 35 MMR
+Starting MMR | 1000 (Iron tier)
+Decay (future) | Not in Phase 1–7. Add in a future update.
+--- Table 25 ---
+Iron | < 1000   #8B9BB0
+Bronze | 1000–1199   #CD7F32
+Silver | 1200–1399   #A8B8CC
+Gold | 1400–1599   #FFB830
+Platinum | 1600–1799   #00D4C2
+Diamond | 1800–1999   #33BBFF
+Nexus Elite | 2000+   #C084FC
+--- Table 26 ---
+/auth | Login / register — unprotected
+/app | Redirects to /app/dashboard
+/app/dashboard | Main dashboard
+/app/profile/:userId | Profile — own or other player
+/app/leaderboard | Global leaderboard
+/app/community | Community player grid
+/app/tournaments | Tournament listing
+/app/circuit/:id | Circuit detail page
+/app/messages | Messaging — optional channel query param
+/app/submit | Result submission
+/app/manual | Field manual
+/app/admin | Admin panel — is_admin guard
