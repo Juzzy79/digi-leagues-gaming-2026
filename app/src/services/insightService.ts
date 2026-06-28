@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 import { getProfile } from './profileService'
 
@@ -98,7 +99,9 @@ export async function generatePerformanceDebrief(userId: string): Promise<{ succ
     }
 
     return { success: true, insights: insights.slice(0, 3) };
-  } catch (err) {
+  } catch (err: any) {
+    handleServiceError(err, 'insightService');
     return { success: false, error: err };
   }
 }
+

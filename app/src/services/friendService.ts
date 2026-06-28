@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 import type { Profile } from '../context/AuthContext'
 
@@ -98,6 +99,7 @@ export async function sendFriendRequest(requesterId: string, addresseeId: string
     if (error) throw error
     return { success: true }
   } catch (err: any) {
+    handleServiceError(err, 'friendService');
     if (err.code === '23505') return { success: false, error: 'Request already sent.' }
     return { success: false, error: err.message }
   }
@@ -125,3 +127,4 @@ export async function getConnectionStatus(userA: string, userB: string): Promise
   if (!data) return 'none'
   return data.status as 'pending' | 'accepted'
 }
+

@@ -33,16 +33,19 @@ CREATE TRIGGER on_auth_user_created
 
 -- 3. ENSURE PERMISSIONS (RLS)
 -- Allow users to update their own profiles (needed for setup)
-CREATE POLICY IF NOT EXISTS "Users can update own profile" 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+CREATE POLICY "Users can update own profile" 
 ON public.profiles FOR UPDATE 
 USING (auth.uid() = id);
 
 -- Allow anyone to read profiles (needed for leaderboards/matches)
-CREATE POLICY IF NOT EXISTS "Public profiles are viewable by everyone" 
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
+CREATE POLICY "Public profiles are viewable by everyone" 
 ON public.profiles FOR SELECT 
 USING (true);
 
 -- 4. FIX ACTIVITY FEED PERMISSIONS
 -- Ensure users can see the feed
 ALTER TABLE public.activity_feed ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Public read activity_feed" ON public.activity_feed FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Public read activity_feed" ON public.activity_feed;
+CREATE POLICY "Public read activity_feed" ON public.activity_feed FOR SELECT USING (true);

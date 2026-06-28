@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 
 export interface Goal {
@@ -24,7 +25,8 @@ export async function getActiveGoal(userId: string): Promise<{ data: Goal | null
 
     if (error && error.code !== 'PGRST116') throw error // PGRST116 is no rows
     return { data: data || null }
-  } catch (err) {
+  } catch (err: any) {
+    handleServiceError(err, 'goalService');
     return { data: null, error: err }
   }
 }
@@ -45,7 +47,8 @@ export async function createGoal(userId: string, title: string, targetUsr?: numb
       
     if (error) throw error
     return { success: true, data }
-  } catch (err) {
+  } catch (err: any) {
+    handleServiceError(err, 'goalService');
     return { success: false, error: err }
   }
 }
@@ -58,7 +61,9 @@ export async function updateGoalStatus(goalId: string, status: 'achieved' | 'fai
       .eq('id', goalId)
     if (error) throw error
     return { success: true }
-  } catch (err) {
+  } catch (err: any) {
+    handleServiceError(err, 'goalService');
     return { success: false, error: err }
   }
 }
+

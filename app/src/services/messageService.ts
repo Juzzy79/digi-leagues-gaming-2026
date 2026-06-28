@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 
 export interface Message {
@@ -33,6 +34,7 @@ export async function getMessages(channel: string, limit: number = 50) {
     
     return { data: mapped, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'messageService');
     return { data: [], error: err };
   }
 }
@@ -59,7 +61,9 @@ export async function sendMessage(userId: string, username: string, content: str
     if (error) throw error;
     return { success: true, data, error: null };
   } catch (err: any) {
-    console.error("sendMessage catch block:", err);
+    handleServiceError(err, 'messageService');
+    
     return { success: false, data: null, error: err };
   }
 }
+

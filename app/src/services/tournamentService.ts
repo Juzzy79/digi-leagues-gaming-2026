@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 
 export interface Tournament {
@@ -80,6 +81,7 @@ export async function getTournaments(statusFilter?: string[]) {
     if (error) throw error;
     return { data, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'tournamentService');
     return { data: [], error: err };
   }
 }
@@ -95,6 +97,7 @@ export async function getTournamentsByCircuit(circuitId: string) {
     if (error) throw error;
     return { data, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'tournamentService');
     return { data: [], error: err };
   }
 }
@@ -110,6 +113,7 @@ export async function createTournament(tournament: Partial<Tournament>) {
     if (error) throw error;
     return { success: true, data, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'tournamentService');
     return { success: false, data: null, error: err };
   }
 }
@@ -129,6 +133,7 @@ export async function registerForTournament(tournamentId: string, playerId: stri
     if (error) throw error;
     return { success: true, data, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'tournamentService');
     return { success: false, data: null, error: err };
   }
 }
@@ -145,6 +150,7 @@ export async function checkRegistration(tournamentId: string, playerId: string) 
     if (error && error.code !== 'PGRST116') throw error; // PGRST116 is no rows
     return { isRegistered: !!data, status: data?.status || null, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'tournamentService');
     return { isRegistered: false, status: null, error: err };
   }
 }
@@ -159,6 +165,7 @@ export async function getTournamentRegistrations(tournamentId: string) {
     if (error) throw error;
     return { data, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'tournamentService');
     return { data: [], error: err };
   }
 }
@@ -172,6 +179,7 @@ export async function getBlueprints() {
     if (error) throw error;
     return { data: data as TournamentBlueprint[], error: null };
   } catch (err: any) {
+    handleServiceError(err, 'tournamentService');
     return { data: [], error: err };
   }
 }
@@ -214,6 +222,7 @@ export async function materializeTournament(blueprint: TournamentBlueprint) {
 
     return { success: true, data: tData, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'tournamentService');
     return { success: false, data: null, error: err };
   }
 }
@@ -250,6 +259,7 @@ export async function getTournamentMatches(tournamentId: string) {
 
     return { data: transformedData, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'tournamentService');
     return { data: [], error: err };
   }
 }
@@ -423,7 +433,8 @@ export async function startTournament(tournamentId: string) {
 
     return { success: true };
   } catch (err: any) {
-    console.error("Failed to start tournament:", err);
+    handleServiceError(err, 'tournamentService');
+    
     return { success: false, error: err };
   }
 }
@@ -593,6 +604,7 @@ export async function updateMatchScore(matchId: string, score1: number, score2: 
 
     return { success: true, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'tournamentService');
     return { success: false, error: err };
   }
 }
@@ -708,8 +720,9 @@ export async function completeTournament(tournamentId: string, winnerId: string)
     // 4. Trigger auto_schedule_next
     await supabase.rpc('auto_schedule_next_tournament', { p_tournament_id: tournamentId });
     
-  } catch (err) {
-    console.error("Failed to complete tournament properly:", err);
+  } catch (err: any) {
+    handleServiceError(err, 'tournamentService');
+    
   }
 }
 
@@ -728,3 +741,4 @@ export async function getPredictions(tournamentId: string) {
   const { data, error } = await supabase.from('tournament_predictions').select('*').eq('tournament_id', tournamentId);
   return { data, error };
 }
+

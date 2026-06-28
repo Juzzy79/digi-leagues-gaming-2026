@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { ShieldAlert, ChevronUp } from 'lucide-react'
 import Button from './Button'
 import { useEffect } from 'react'
+import { soundEngine } from '../utils/SoundEngine'
 
 interface PromotionModalProps {
   newTierName: string
@@ -11,9 +12,7 @@ interface PromotionModalProps {
 
 export default function PromotionModal({ newTierName, onClose }: PromotionModalProps) {
   useEffect(() => {
-    // Optional: play sound here if you have an audio file
-    // const audio = new Audio('/sounds/promotion.mp3');
-    // audio.play().catch(e => console.log('Audio play failed', e));
+    soundEngine.playPromotion();
   }, []);
 
   return (

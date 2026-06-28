@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 
 export async function signUp(email: string, password: string, username: string) {
@@ -19,3 +20,4 @@ export async function signOut() {
 export async function getSession() {
   return supabase.auth.getSession()
 }
+

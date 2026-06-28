@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 // src/services/crewService.ts
 import { supabase } from './supabase'
 
@@ -40,6 +41,7 @@ export async function createCrew(userId: string, name: string, tag: string) {
 
     return { success: true, data: crew, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'crewService');
     return { success: false, data: null, error: err };
   }
 }
@@ -53,6 +55,7 @@ export async function joinCrew(userId: string, crewId: string) {
     if (error) throw error;
     return { success: true, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'crewService');
     return { success: false, error: err };
   }
 }
@@ -68,6 +71,7 @@ export async function getUserCrew(userId: string) {
     if (error) throw error;
     return { data: data?.crews as Crew | undefined, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'crewService');
     return { data: null, error: err };
   }
 }
@@ -85,6 +89,8 @@ export async function getCrewMembers(crewId: string) {
     const sorted = (data as any[]).sort((a, b) => (b.profiles.usr || 0) - (a.profiles.usr || 0));
     return { data: sorted as CrewMember[], error: null };
   } catch (err: any) {
+    handleServiceError(err, 'crewService');
     return { data: [], error: err };
   }
 }
+

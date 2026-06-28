@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 // src/services/achievementService.ts
 import { supabase } from './supabase'
 
@@ -19,7 +20,8 @@ export async function getAchievements() {
     const { data, error } = await supabase.from('achievements').select('*');
     if (error) throw error;
     return { data: data as Achievement[], error: null };
-  } catch (err) {
+  } catch (err: any) {
+    handleServiceError(err, 'achievementService');
     return { data: [], error: err };
   }
 }
@@ -41,7 +43,8 @@ export async function getUserAchievements(userId: string) {
     })) as UserAchievement[];
 
     return { data: formatted, error: null };
-  } catch (err) {
+  } catch (err: any) {
+    handleServiceError(err, 'achievementService');
     return { data: [], error: err };
   }
 }
@@ -140,8 +143,10 @@ export async function evaluatePostMatchAchievements(
     }
 
     return unlockedIds;
-  } catch (err) {
-    console.error("Error evaluating achievements:", err);
+  } catch (err: any) {
+    handleServiceError(err, 'achievementService');
+    
     return [];
   }
 }
+

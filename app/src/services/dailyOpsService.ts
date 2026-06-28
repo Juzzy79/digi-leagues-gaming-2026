@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -227,8 +228,10 @@ export async function completeDailyOp(userId: string, opKey: string, xpAmount: n
     await supabase.rpc('award_career_xp', { p_user_id: userId, p_amount: xpAmount })
 
     return true
-  } catch (err) {
+  } catch (err: any) {
+    handleServiceError(err, 'dailyOpsService');
     console.warn('completeDailyOp failed:', err)
     return false
   }
 }
+

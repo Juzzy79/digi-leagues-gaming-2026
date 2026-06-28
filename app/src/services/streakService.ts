@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 
 export interface StreakData {
@@ -39,7 +40,9 @@ export async function getStreakData(userId: string): Promise<StreakData> {
 export async function updatePlayStreak(userId: string): Promise<void> {
   try {
     await supabase.rpc('update_play_streak', { p_user_id: userId })
-  } catch (err) {
+  } catch (err: any) {
+    handleServiceError(err, 'streakService');
     console.warn('updatePlayStreak RPC failed (non-critical):', err)
   }
 }
+

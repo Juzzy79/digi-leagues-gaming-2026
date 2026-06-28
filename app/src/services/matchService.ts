@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 import { calculateMMRChange, calculateUSR, normalizePerformance, GENRES, getTier } from './rankingService'
 import { updateRivalry } from './rivalryService'
@@ -266,7 +267,8 @@ export async function submitMatch(userId: string, data: MatchResult) {
       unlockedAchievements
     }
   } catch (err: any) {
-    console.error("Match submission failed:", err)
+    handleServiceError(err, 'matchService');
+    
     return { 
       success: false, 
       error: err, 
@@ -292,6 +294,7 @@ export async function getMatchHistory(userId: string) {
     if (error) throw error
     return { data, error: null }
   } catch (err: any) {
+    handleServiceError(err, 'matchService');
     return { data: null, error: err }
   }
 }
@@ -357,7 +360,8 @@ export async function getLeaderboardStats(genre?: string, game?: string) {
     }))
 
   } catch (err: any) {
-    console.error("Leaderboard aggregation failed:", err)
+    handleServiceError(err, 'matchService');
+    
     return []
   }
 }
@@ -374,7 +378,8 @@ export async function getUniqueGamesPerGenre(genre: string) {
     if (error) throw error
     const games = Array.from(new Set(data.map(m => m.game)))
     return games
-  } catch (err) {
+  } catch (err: any) {
+    handleServiceError(err, 'matchService');
     return []
   }
 }
@@ -393,7 +398,9 @@ export async function getUniqueTracksForGame(game: string) {
       if (m.stats && m.stats.track) tracks.add(m.stats.track)
     })
     return Array.from(tracks)
-  } catch (err) {
+  } catch (err: any) {
+    handleServiceError(err, 'matchService');
     return []
   }
 }
+

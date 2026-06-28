@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 export interface Tier {
   name: string;
   colorClass: string;
@@ -199,3 +200,4 @@ export function calculateUSR(genreRatings: Record<string, number>): number {
 
   return Math.round((avgTop3 * 0.7) + (avgAll * 0.3));
 }
+

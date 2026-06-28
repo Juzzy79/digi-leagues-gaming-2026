@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 import { notifyChallengeReceived } from './notificationService'
 
@@ -57,6 +58,7 @@ export async function createChallenge(data: Partial<Challenge>) {
 
     return { success: true, data: result, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'challengeService');
     return { success: false, data: null, error: err };
   }
 }
@@ -73,6 +75,7 @@ export async function getPendingChallenges(userId: string) {
     if (error) throw error;
     return { data, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'challengeService');
     return { data: [], error: err };
   }
 }
@@ -88,6 +91,7 @@ export async function getAcceptedChallenges(userId: string) {
     if (error) throw error;
     return { data, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'challengeService');
     return { data: [], error: err };
   }
 }
@@ -107,6 +111,8 @@ export async function updateChallengeStatus(challengeId: string, status: 'accept
     if (error) throw error;
     return { success: true, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'challengeService');
     return { success: false, error: err };
   }
 }
+

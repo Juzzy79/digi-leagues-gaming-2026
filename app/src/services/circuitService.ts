@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 
 export interface Circuit {
@@ -24,6 +25,7 @@ export async function getActiveCircuits() {
     if (error) throw error;
     return { data, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'circuitService');
     return { data: [], error: err };
   }
 }
@@ -39,6 +41,7 @@ export async function getCircuit(id: string) {
     if (error) throw error;
     return { data, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'circuitService');
     return { data: null, error: err };
   }
 }
@@ -54,6 +57,7 @@ export async function createCircuit(circuit: Partial<Circuit>) {
     if (error) throw error;
     return { success: true, data, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'circuitService');
     return { success: false, data: null, error: err };
   }
 }
@@ -70,6 +74,7 @@ export async function updateCircuitStatus(id: string, status: string) {
     if (error) throw error;
     return { success: true, data, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'circuitService');
     return { success: false, data: null, error: err };
   }
 }
@@ -85,6 +90,7 @@ export async function getCircuitStandings(limit = 10) {
     if (error) throw error;
     return { data, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'circuitService');
     return { data: [], error: err };
   }
 }
@@ -114,6 +120,8 @@ export async function deleteCircuit(id: string) {
     if (error) throw error;
     return { success: true, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'circuitService');
     return { success: false, error: err };
   }
 }
+

@@ -1,21 +1,23 @@
+import { handleServiceError } from '../utils/errorHandler';
 // src/services/careerService.ts
 
 export interface CareerRank {
   name: string;
   levelRange: [number, number]; // e.g. [1, 9]
+  phase: string;
 }
 
 export const CAREER_RANKS: CareerRank[] = [
-  { name: 'Recruit', levelRange: [1, 9] },
-  { name: 'Operative', levelRange: [10, 19] },
-  { name: 'Specialist', levelRange: [20, 29] },
-  { name: 'Ghost', levelRange: [30, 39] },
-  { name: 'Spectre', levelRange: [40, 49] },
-  { name: 'Phantom', levelRange: [50, 59] },
-  { name: 'Vanguard', levelRange: [60, 69] },
-  { name: 'Centurion', levelRange: [70, 79] },
-  { name: 'Commander', levelRange: [80, 89] },
-  { name: 'Warlord', levelRange: [90, 100] }
+  { name: 'Recruit', levelRange: [1, 9], phase: 'Rookie' },
+  { name: 'Operative', levelRange: [10, 19], phase: 'Rookie' },
+  { name: 'Specialist', levelRange: [20, 29], phase: 'Rookie' },
+  { name: 'Ghost', levelRange: [30, 39], phase: 'Veteran' },
+  { name: 'Spectre', levelRange: [40, 49], phase: 'Veteran' },
+  { name: 'Phantom', levelRange: [50, 59], phase: 'Veteran' },
+  { name: 'Vanguard', levelRange: [60, 69], phase: 'Pro' },
+  { name: 'Centurion', levelRange: [70, 79], phase: 'Pro' },
+  { name: 'Commander', levelRange: [80, 89], phase: 'Pro' },
+  { name: 'Warlord', levelRange: [90, 100], phase: 'Legend' }
 ];
 
 export const MAX_LEVEL = 100;
@@ -40,6 +42,7 @@ export function getLevelFromXp(xp: number): number {
 export interface CareerProgress {
   level: number;
   rankName: string;
+  phaseName: string;
   currentXp: number;
   xpForCurrentLevel: number;
   xpForNextLevel: number;
@@ -66,6 +69,7 @@ export function getCareerProgress(xp: number): CareerProgress {
   return {
     level,
     rankName: rank.name,
+    phaseName: rank.phase,
     currentXp: safeXp,
     xpForCurrentLevel: xpForCurrent,
     xpForNextLevel: xpForNext,
@@ -73,3 +77,4 @@ export function getCareerProgress(xp: number): CareerProgress {
     isMaxLevel: level === MAX_LEVEL
   };
 }
+

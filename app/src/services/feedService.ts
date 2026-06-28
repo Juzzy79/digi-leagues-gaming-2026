@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 
 export async function getFeed(limit = 20) {
@@ -11,6 +12,8 @@ export async function getFeed(limit = 20) {
     if (error) throw error
     return { data, error: null }
   } catch (err: any) {
+    handleServiceError(err, 'feedService');
     return { data: null, error: err }
   }
 }
+

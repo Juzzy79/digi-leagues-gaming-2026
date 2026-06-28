@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 
 
@@ -159,3 +160,4 @@ export const sessionService = {
     return { data, error };
   }
 }
+

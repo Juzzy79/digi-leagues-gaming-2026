@@ -4,6 +4,8 @@ import { getNotifications, markAllRead } from '../services/notificationService'
 import type { Notification } from '../services/notificationService'
 import { useAuth } from '../context/AuthContext'
 import { Link } from 'react-router-dom'
+import { soundEngine } from '../utils/SoundEngine'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
   challenge_received: <Crosshair size={14} className="text-duel-500" />,
@@ -36,10 +38,15 @@ export default function NotificationBell() {
     let cancelled = false
 
     const fetch = async () => {
-      const { data, unreadCount } = await getNotifications(user.id)
+      const { data, unreadCount: newUnread } = await getNotifications(user.id)
       if (!cancelled) {
         setNotifications(data)
-        setUnreadCount(unreadCount)
+        setUnreadCount((prev) => {
+          if (newUnread > prev) {
+            soundEngine.playSuccess();
+          }
+          return newUnread;
+        })
       }
     }
 
@@ -105,48 +112,53 @@ export default function NotificationBell() {
                 <p className="text-xs font-mono uppercase tracking-wider">No intel received</p>
               </div>
             ) : (
-              notifications.map(n => {
-                const isOvertake = n.type === 'rank_overtaken';
-                return (
-                  <div
-                    key={n.id}
-                    className={`flex items-start gap-3 px-4 py-3 transition-all ${
-                      isOvertake 
-                        ? 'bg-threat-900/20 border-l-2 border-threat-500 hover:bg-threat-900/40 shadow-[inset_0_0_20px_rgba(239,68,68,0.1)]' 
-                        : `hover:bg-steel-800/50 ${!n.is_read ? 'bg-nexus-900/10' : ''}`
-                    }`}
-                  >
-                    <div className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded flex items-center justify-center ${isOvertake ? 'bg-threat-950 border border-threat-500/50 shadow-[0_0_10px_rgba(239,68,68,0.3)]' : 'bg-steel-800 w-6 h-6'}`}>
-                      {TYPE_ICON[n.type] ?? <Bell size={isOvertake ? 16 : 12} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      {n.link ? (
-                        <Link to={n.link} onClick={() => setOpen(false)} className="block group">
-                          <p className={`font-mono font-bold uppercase tracking-wider transition-colors ${isOvertake ? 'text-sm text-threat-400 group-hover:text-threat-300' : 'text-xs text-ink-100 group-hover:text-nexus-400'}`}>
-                            {n.title}
-                          </p>
-                          <p className={`font-body mt-0.5 leading-snug ${isOvertake ? 'text-xs text-ink-300' : 'text-[11px] text-ink-400'}`}>
-                            {n.body}
-                          </p>
-                        </Link>
-                      ) : (
-                        <>
-                          <p className={`font-mono font-bold uppercase tracking-wider ${isOvertake ? 'text-sm text-threat-400' : 'text-xs text-ink-100'}`}>
-                            {n.title}
-                          </p>
-                          <p className={`font-body mt-0.5 leading-snug ${isOvertake ? 'text-xs text-ink-300' : 'text-[11px] text-ink-400'}`}>
-                            {n.body}
-                          </p>
-                        </>
+              <AnimatePresence initial={false}>
+                {notifications.map(n => {
+                  const isOvertake = n.type === 'rank_overtaken';
+                  return (
+                    <motion.div
+                      key={n.id}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className={`flex items-start gap-3 px-4 py-3 transition-all ${
+                        isOvertake 
+                          ? 'bg-threat-900/20 border-l-2 border-threat-500 hover:bg-threat-900/40 shadow-[inset_0_0_20px_rgba(239,68,68,0.1)]' 
+                          : `hover:bg-steel-800/50 ${!n.is_read ? 'bg-nexus-900/10' : ''}`
+                      }`}
+                    >
+                      <div className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded flex items-center justify-center ${isOvertake ? 'bg-threat-950 border border-threat-500/50 shadow-[0_0_10px_rgba(239,68,68,0.3)]' : 'bg-steel-800 w-6 h-6'}`}>
+                        {TYPE_ICON[n.type] ?? <Bell size={isOvertake ? 16 : 12} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {n.link ? (
+                          <Link to={n.link} onClick={() => setOpen(false)} className="block group">
+                            <p className={`font-mono font-bold uppercase tracking-wider transition-colors ${isOvertake ? 'text-sm text-threat-400 group-hover:text-threat-300' : 'text-xs text-ink-100 group-hover:text-nexus-400'}`}>
+                              {n.title}
+                            </p>
+                            <p className={`font-body mt-0.5 leading-snug ${isOvertake ? 'text-xs text-ink-300' : 'text-[11px] text-ink-400'}`}>
+                              {n.body}
+                            </p>
+                          </Link>
+                        ) : (
+                          <>
+                            <p className={`font-mono font-bold uppercase tracking-wider ${isOvertake ? 'text-sm text-threat-400' : 'text-xs text-ink-100'}`}>
+                              {n.title}
+                            </p>
+                            <p className={`font-body mt-0.5 leading-snug ${isOvertake ? 'text-xs text-ink-300' : 'text-[11px] text-ink-400'}`}>
+                              {n.body}
+                            </p>
+                          </>
+                        )}
+                        <span className="text-[10px] text-ink-600 font-mono mt-1 block">{timeAgo(n.created_at)}</span>
+                      </div>
+                      {!n.is_read && (
+                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-2 ${isOvertake ? 'bg-threat-500 animate-pulse' : 'bg-nexus-400'}`} />
                       )}
-                      <span className="text-[10px] text-ink-600 font-mono mt-1 block">{timeAgo(n.created_at)}</span>
-                    </div>
-                    {!n.is_read && (
-                      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-2 ${isOvertake ? 'bg-threat-500 animate-pulse' : 'bg-nexus-400'}`} />
-                    )}
-                  </div>
-                )
-              })
+                    </motion.div>
+                  )
+                })}
+              </AnimatePresence>
             )}
           </div>
 

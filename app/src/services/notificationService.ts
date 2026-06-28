@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 
 export interface Notification {
@@ -59,7 +60,8 @@ export async function createNotification(data: Omit<Notification, 'id' | 'is_rea
       body: data.body,
       link: data.link ?? null,
     })
-  } catch (err) {
+  } catch (err: any) {
+    handleServiceError(err, 'notificationService');
     console.warn('Notification insert failed (non-critical):', err)
   }
 }
@@ -114,3 +116,4 @@ export async function notifyTournamentStarting(userId: string, tournamentName: s
     link: '/app/tournaments',
   })
 }
+

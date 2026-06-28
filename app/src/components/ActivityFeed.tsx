@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { getFeed } from '../services/feedService'
 import { supabase } from '../services/supabase'
 import { Activity, Clock } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { soundEngine } from '../utils/SoundEngine'
 
 export default function ActivityFeed({ className = '' }: { className?: string }) {
   const [feed, setFeed] = useState<any[]>([])
@@ -23,6 +25,7 @@ export default function ActivityFeed({ className = '' }: { className?: string })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_feed' }, payload => {
         if (!cancelled) {
           setFeed(prev => [payload.new, ...prev].slice(0, 50));
+          soundEngine.playTick();
         }
       })
       .subscribe();
@@ -56,26 +59,35 @@ export default function ActivityFeed({ className = '' }: { className?: string })
             No recent activity detected
           </div>
         ) : (
-          feed.map(item => (
-            <div key={item.id} className="flex gap-3 p-3 rounded hover:bg-steel-800/50 transition-colors">
-              <div className="w-10 h-10 rounded-full bg-steel-800 border-2 border-steel-700 flex-shrink-0 overflow-hidden flex items-center justify-center flex-col">
-                {item.user_avatar ? (
-                  <img src={item.user_avatar} alt={item.username} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="font-display font-bold text-nexus-500 text-xs text-center leading-none">{item.username.substring(0,2).toUpperCase()}</span>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-body text-ink-300">
-                  <span className="font-bold text-ink-100">{item.username}</span> {item.description}
-                </p>
-                <div className="flex items-center gap-1 mt-1 text-[10px] text-ink-500 font-mono uppercase">
-                  <Clock size={10} />
-                  <span>{new Date(item.created_at).toLocaleString()}</span>
+          <AnimatePresence initial={false}>
+            {feed.map(item => (
+              <motion.div 
+                key={item.id} 
+                initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                animate={{ opacity: 1, height: 'auto', scale: 1 }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3 }}
+                className="flex gap-3 p-3 rounded hover:bg-steel-800/50 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-full bg-steel-800 border-2 border-steel-700 flex-shrink-0 overflow-hidden flex items-center justify-center flex-col">
+                  {item.user_avatar ? (
+                    <img src={item.user_avatar} alt={item.username} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="font-display font-bold text-nexus-500 text-xs text-center leading-none">{item.username.substring(0,2).toUpperCase()}</span>
+                  )}
                 </div>
-              </div>
-            </div>
-          ))
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-body text-ink-300">
+                    <span className="font-bold text-ink-100">{item.username}</span> {item.description}
+                  </p>
+                  <div className="flex items-center gap-1 mt-1 text-[10px] text-ink-500 font-mono uppercase">
+                    <Clock size={10} />
+                    <span>{new Date(item.created_at).toLocaleString()}</span>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         )}
       </div>
     </div>

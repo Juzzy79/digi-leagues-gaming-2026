@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 import type { Profile } from '../context/AuthContext'
 
@@ -11,6 +12,7 @@ export async function getAllProfiles(): Promise<{ data: Profile[] | null; error:
     if (error) throw error
     return { data, error: null }
   } catch (err: any) {
+    handleServiceError(err, 'profileService');
     return { data: null, error: err }
   }
 }
@@ -26,6 +28,7 @@ export async function getProfile(userId: string): Promise<{ data: Profile | null
     if (error) throw error
     return { data, error: null }
   } catch (err: any) {
+    handleServiceError(err, 'profileService');
     return { data: null, error: err }
   }
 }
@@ -42,6 +45,8 @@ export async function updateProfile(userId: string, updates: Partial<Profile>) {
     if (error) throw error
     return { data, error: null }
   } catch (err: any) {
+    handleServiceError(err, 'profileService');
     return { data: null, error: err }
   }
 }
+

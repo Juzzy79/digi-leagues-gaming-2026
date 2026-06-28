@@ -1,3 +1,4 @@
+import { handleServiceError } from '../utils/errorHandler';
 import { supabase } from './supabase'
 
 export async function updateRivalry(winnerId: string, loserId: string) {
@@ -9,7 +10,8 @@ export async function updateRivalry(winnerId: string, loserId: string) {
     
     return { success: true, error: null };
   } catch (err: any) {
-    console.error("Rivalry update failed", err);
+    handleServiceError(err, 'rivalryService');
+    
     return { success: false, error: err };
   }
 }
@@ -82,6 +84,7 @@ export async function getNemeses(userId: string) {
     if (error) throw error;
     return { data, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'rivalryService');
     return { data: [], error: err };
   }
 }
@@ -113,6 +116,7 @@ export async function getClaimedDogTags(userId: string) {
 
     return { data: merged, error: null };
   } catch (err: any) {
+    handleServiceError(err, 'rivalryService');
     return { data: [], error: err };
   }
 }
@@ -167,6 +171,39 @@ export async function getHeadToHeadStats(userId: string, opponentId: string) {
       error: null 
     };
   } catch (err: any) {
+    handleServiceError(err, 'rivalryService');
     return { data: null, error: err };
   }
 }
+
+export async function findDynamicRivals(userId: string) {
+  try {
+    // Fetch user's current USR
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('usr')
+      .eq('id', userId)
+      .single();
+
+    if (!profile) return { data: [], error: null };
+
+    // Find players within +/- 75 USR
+    const minUsr = (profile.usr || 1000) - 75;
+    const maxUsr = (profile.usr || 1000) + 75;
+
+    const { data: similarPlayers, error } = await supabase
+      .from('profiles')
+      .select('id, username, usr, avatar_url')
+      .neq('id', userId)
+      .gte('usr', minUsr)
+      .lte('usr', maxUsr)
+      .limit(5);
+
+    if (error) throw error;
+    return { data: similarPlayers, error: null };
+  } catch (err: any) {
+    handleServiceError(err, 'rivalryService');
+    return { data: [], error: err };
+  }
+}
+
