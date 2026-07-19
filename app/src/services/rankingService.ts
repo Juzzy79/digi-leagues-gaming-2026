@@ -117,6 +117,55 @@ export function normalizePerformance(genre: string, stats: any, baselines?: { co
     return Math.max(0.1, (101 - stats.position) / 50);
   }
 
+  // Racing logic: Time-based (lower is better) or Position-based
+  if (genre === 'Racing') {
+    let positionIndex = 1.0;
+    let hasPosition = false;
+    
+    if (stats.position !== undefined && stats.position > 0) {
+      hasPosition = true;
+      // Assume a standard 8-12 player race. 1st = 2.0, 2nd = 1.5, etc.
+      positionIndex = Math.max(0.1, 2.0 - ((stats.position - 1) * 0.3));
+    }
+    
+    const timeMetric = stats.total_time || stats.best_lap;
+    let timeIndex = 1.0;
+    let hasTime = false;
+    
+    if (timeMetric && timeMetric > 0) {
+      hasTime = true;
+      let hasBaseline = false;
+      let communityIndex = 1.0;
+      let personalIndex = 1.0;
+
+      if (baselines?.community && baselines.community > 0) {
+        communityIndex = Math.min(2.0, baselines.community / timeMetric);
+        hasBaseline = true;
+      }
+      
+      if (baselines?.personal && baselines.personal > 0) {
+        personalIndex = Math.min(2.0, baselines.personal / timeMetric);
+        hasBaseline = true;
+      }
+
+      if (hasBaseline) {
+        // Blend: 70% Community, 30% Personal
+        timeIndex = (communityIndex * 0.7) + (personalIndex * 0.3);
+      } else {
+        // No baseline exists (first run on this track!). Give a slight reward for setting the time.
+        timeIndex = 1.15;
+      }
+    }
+    
+    if (hasPosition && hasTime) {
+      return (positionIndex * 0.5) + (timeIndex * 0.5);
+    } else if (hasPosition) {
+      return positionIndex;
+    } else if (hasTime) {
+      return timeIndex;
+    }
+  }
+
   return 1.0;
 }
 
