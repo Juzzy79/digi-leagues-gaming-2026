@@ -77,9 +77,47 @@ export async function submitMatch(userId: string, data: MatchResult) {
       if (persScores.length > 0) {
         personalBaseline = Math.max(...persScores);
       }
-    }
+    } else if (data.genre === 'Racing' && data.stats?.track_name) {
+      const metric = data.stats.best_lap ? 'best_lap' : 'total_time';
+      const currentVal = data.stats[metric];
+      
+      if (currentVal) {
+        const currentOom = Math.log10(Math.max(1, currentVal));
+        
+        const { data: communityHistory } = await supabase
+          .from('match_history')
+          .select('stats')
+          .eq('game', data.game)
+          .eq('is_practice', false)
+          .limit(200);
 
-    // Pass the hybrid baselines object instead of the old genre baseline
+        const commScores = communityHistory
+          ?.filter(h => h.stats?.track_name === data.stats.track_name)
+          .map(h => h.stats?.[metric])
+          .filter(s => typeof s === 'number')
+          .filter(s => Math.abs(Math.log10(Math.max(1, s)) - currentOom) <= 1.5) || [];
+          
+        if (commScores.length > 0) {
+          communityBaseline = commScores.reduce((a, b) => a + b, 0) / commScores.length;
+        }
+
+        const { data: personalHistory } = await supabase
+          .from('match_history')
+          .select('stats')
+          .eq('game', data.game)
+          .eq('user_id', userId)
+          .eq('is_practice', false);
+
+        const persScores = personalHistory
+          ?.filter(h => h.stats?.track_name === data.stats.track_name)
+          .map(h => h.stats?.[metric])
+          .filter(s => typeof s === 'number') || [];
+          
+        if (persScores.length > 0) {
+          personalBaseline = Math.min(...persScores);
+        }
+      }
+    } // Pass the hybrid baselines object instead of the old genre baseline
     const performanceIndex = normalizePerformance(data.genre, data.stats, { 
       community: communityBaseline, 
       personal: personalBaseline 
@@ -213,10 +251,11 @@ export async function submitMatch(userId: string, data: MatchResult) {
 
     // If practice mode, we skip overtakes and promotions, but we might return a PB flag
     let isPb = false;
-    if (data.isPractice && GENRES[data.genre]?.isHighScore && personalBaseline) {
-      if (data.genre === 'Racing' && data.stats.total_time && data.stats.total_time < personalBaseline) {
-        isPb = true;
-      } else if (data.genre !== 'Racing' && data.stats.score && data.stats.score > personalBaseline) {
+    if (data.isPractice && personalBaseline) {
+      if (data.genre === 'Racing') {
+        const metricVal = data.stats.best_lap || data.stats.total_time;
+        if (metricVal && metricVal < personalBaseline) isPb = true;
+      } else if (GENRES[data.genre]?.isHighScore && data.stats.score && data.stats.score > personalBaseline) {
         isPb = true;
       }
     }
@@ -395,7 +434,7 @@ export async function getUniqueTracksForGame(game: string) {
     if (error) throw error
     const tracks = new Set<string>()
     data.forEach(m => {
-      if (m.stats && m.stats.track) tracks.add(m.stats.track)
+      if (m.stats && m.stats.track_name) tracks.add(m.stats.track_name)
     })
     return Array.from(tracks)
   } catch (err: any) {
