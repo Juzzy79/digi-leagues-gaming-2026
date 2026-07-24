@@ -39,6 +39,7 @@ export async function submitMatch(userId: string, data: MatchResult) {
     // 2. Normalization & Rating logic
     let communityBaseline: number | undefined = undefined;
     let personalBaseline: number | undefined = undefined;
+    let racingMetric: string | undefined = undefined;
 
     if (GENRES[data.genre]?.isHighScore && data.stats?.score !== undefined) {
       const currentScore = data.stats.score;
@@ -117,10 +118,12 @@ export async function submitMatch(userId: string, data: MatchResult) {
           personalBaseline = Math.min(...persScores);
         }
       }
+      racingMetric = metric;
     } // Pass the hybrid baselines object instead of the old genre baseline
     const performanceIndex = normalizePerformance(data.genre, data.stats, { 
       community: communityBaseline, 
-      personal: personalBaseline 
+      personal: personalBaseline,
+      metric: racingMetric
     })
     const mmrChange = calculateMMRChange(currentMmr, performanceIndex, data.result, currentStreak, data.stats?.teammates, data.isAi)
     const newGenreRating = currentMmr + mmrChange

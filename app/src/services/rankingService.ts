@@ -71,7 +71,7 @@ export function getNextTier(mmr: number): Tier | null {
  * @param stats The raw stats object
  * @param baseline The player's baseline (if high score game) or global average
  */
-export function normalizePerformance(genre: string, stats: any, baselines?: { community?: number, personal?: number }): number {
+export function normalizePerformance(genre: string, stats: any, baselines?: { community?: number, personal?: number, metric?: string }): number {
   const config = GENRES[genre];
   if (!config) return 1.0; // Default average
 
@@ -128,7 +128,7 @@ export function normalizePerformance(genre: string, stats: any, baselines?: { co
       positionIndex = Math.max(0.1, 2.0 - ((stats.position - 1) * 0.3));
     }
     
-    const timeMetric = stats.total_time || stats.best_lap;
+    const timeMetric = baselines?.metric ? stats[baselines.metric] : (stats.total_time || stats.best_lap);
     let timeIndex = 1.0;
     let hasTime = false;
     

@@ -1,7 +1,7 @@
 // src/components/CareerTimeline.tsx
 import { useEffect, useState } from 'react'
 import { supabase } from '../services/supabase'
-import { getCareerProgress, CareerProgress } from '../services/careerService'
+import { getCareerProgress, type CareerProgress } from '../services/careerService'
 import { Award, ShieldAlert, Trophy, Crosshair, Star } from 'lucide-react'
 
 // Map event types to icons and colors
