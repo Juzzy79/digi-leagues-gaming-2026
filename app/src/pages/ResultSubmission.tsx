@@ -70,8 +70,14 @@ export default function ResultSubmission() {
   const [bestLapSec, setBestLapSec] = useState('')
   const [bestLapMs, setBestLapMs] = useState('')
   const [popularTracks, setPopularTracks] = useState<string[]>([])
+  const [carName, setCarName] = useState('')
   const [carClass, setCarClass] = useState('')
   const [carHp, setCarHp] = useState('')
+  
+  // Rival Encounter State
+  const [rivalName, setRivalName] = useState('')
+  const [killsOnRival, setKillsOnRival] = useState('')
+  const [deathsToRival, setDeathsToRival] = useState('')
   
   // Challenges & Fighter States
   const [challenges, setChallenges] = useState<Challenge[]>([])
@@ -136,6 +142,7 @@ export default function ResultSubmission() {
       finalStats = {
         ...finalStats,
         track_name: trackName,
+        car_name: carName || undefined,
         car_class: carClass || undefined,
         car_hp: carHp ? parseFloat(carHp) : undefined
       };
@@ -166,6 +173,14 @@ export default function ResultSubmission() {
         wins_in_set: playerWins,
         perfect_rounds: perfectRounds
       };
+    }
+
+    if (rivalName.trim()) {
+      finalStats.rival = {
+        name: rivalName.trim(),
+        kills_on_rival: parseInt(killsOnRival) || 0,
+        deaths_to_rival: parseInt(deathsToRival) || 0
+      }
     }
 
     const res = await submitMatch(user.id, {
@@ -246,6 +261,12 @@ export default function ResultSubmission() {
     setBestLapMin('')
     setBestLapSec('')
     setBestLapMs('')
+    setCarName('')
+    setCarClass('')
+    setCarHp('')
+    setRivalName('')
+    setKillsOnRival('')
+    setDeathsToRival('')
   }
 
   if (successData) {
@@ -607,6 +628,20 @@ export default function ResultSubmission() {
                       </div>
                     </div>
                   )}
+                  
+                  <div className="space-y-2">
+                    <label className="text-[10px] uppercase text-ink-500 tracking-widest flex justify-between">
+                      Vehicle / Car Name <span className="text-steel-600">(Opt)</span>
+                    </label>
+                    <input 
+                      type="text"
+                      placeholder="e.g. Porsche 911 GT3 RS"
+                      value={carName}
+                      onChange={e => setCarName(e.target.value)}
+                      className="w-full bg-steel-900 border border-steel-700 px-4 py-2 text-nexus-400 focus:border-nexus-500 focus:outline-none transition-colors font-bold uppercase"
+                    />
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-[10px] uppercase text-ink-500 tracking-widest flex justify-between">
@@ -740,6 +775,51 @@ export default function ResultSubmission() {
                   </div>
                 </div>
               )}
+
+              {/* Rival Encounter */}
+              <div className="mt-8 border-t border-steel-800 pt-6">
+                <h3 className="text-sm font-display font-black text-threat-500 tracking-widest uppercase mb-4 flex items-center gap-2">
+                  <Skull size={16} /> Rival Encounter <span className="text-[10px] text-steel-600">(Optional)</span>
+                </h3>
+                <div className="bg-steel-950 p-4 rounded border border-steel-800 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] uppercase text-ink-500 tracking-widest block mb-1">Rival Name</label>
+                    <input 
+                      type="text"
+                      placeholder="e.g. xX_Sniper_Xx"
+                      value={rivalName}
+                      onChange={e => setRivalName(e.target.value)}
+                      className="w-full bg-steel-900 border border-steel-700 px-4 py-2 text-threat-400 focus:border-threat-500 focus:outline-none transition-colors font-bold"
+                    />
+                  </div>
+                  {rivalName && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] uppercase text-ink-500 tracking-widest block mb-1">Your Kills on Rival</label>
+                        <input 
+                          type="number"
+                          placeholder="0"
+                          value={killsOnRival}
+                          onChange={e => setKillsOnRival(e.target.value)}
+                          className="w-full bg-steel-900 border border-steel-700 px-4 py-2 text-threat-400 focus:border-threat-500 focus:outline-none transition-colors font-bold"
+                          min="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase text-ink-500 tracking-widest block mb-1">Rival Kills on You</label>
+                        <input 
+                          type="number"
+                          placeholder="0"
+                          value={deathsToRival}
+                          onChange={e => setDeathsToRival(e.target.value)}
+                          className="w-full bg-steel-900 border border-steel-700 px-4 py-2 text-threat-400 focus:border-threat-500 focus:outline-none transition-colors font-bold"
+                          min="0"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {error && (
                 <motion.div 

@@ -2,7 +2,7 @@ import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, User, Trophy, Users, Swords,
   MessageSquare, BookOpen, Shield, LogOut, ChevronRight,
-  PlusCircle, Crown, Share2
+  PlusCircle, Crown, Share2, Target
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../context/AuthContext'
@@ -21,10 +21,12 @@ import FieldManual from '../pages/FieldManual'
 import SessionConsole from '../pages/SessionConsole'
 import Versus from '../pages/Versus'
 import HallOfFame from '../pages/HallOfFame'
+import WarRoom from '../pages/WarRoom'
 import NotificationBell from './NotificationBell'
 
 const navItems = [
   { to: '/app/dashboard',   label: 'Dashboard',    icon: LayoutDashboard },
+  { to: '/app/war-room',    label: 'War Room',     icon: Target },
   { to: '/app/submit',      label: 'Submit Result', icon: ChevronRight },
   { to: '/app/leaderboard', label: 'Leaderboard',   icon: Trophy },
   { to: '/app/community',   label: 'Community',     icon: Users },
@@ -194,6 +196,7 @@ export default function AppShell() {
             <Route path="session/:id"    element={<SessionConsole />} />
             <Route path="versus/:opponentId" element={<Versus />} />
             <Route path="hall-of-fame"   element={<HallOfFame />} />
+            <Route path="war-room"       element={<WarRoom />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Routes>
         </main>
