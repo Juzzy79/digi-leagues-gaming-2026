@@ -296,7 +296,7 @@ export default function Dashboard() {
                     <p className="text-lg font-display font-black text-nexus-400">
                       {timeUntil(nextTournament.start_time)}
                     </p>
-                    <Link to="/app/tournaments" className="text-[10px] font-mono text-nexus-400/60 hover:text-nexus-400 transition-colors uppercase tracking-wider flex items-center gap-1">
+                    <Link to={`/app/tournaments?select=${nextTournament.id}`} className="text-[10px] font-mono text-nexus-400/60 hover:text-nexus-400 transition-colors uppercase tracking-wider flex items-center gap-1">
                       View bracket <ChevronRight size={10} />
                     </Link>
                   </>

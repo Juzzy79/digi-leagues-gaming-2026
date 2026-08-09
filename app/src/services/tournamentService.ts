@@ -758,3 +758,18 @@ export async function removeParticipant(tournamentId: string, participantId: str
   }
 }
 
+export async function deleteTournament(id: string) {
+  try {
+    const { error } = await supabase
+      .from('tournaments')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    return { success: true, error: null };
+  } catch (err: any) {
+    handleServiceError(err, 'tournamentService');
+    return { success: false, error: err };
+  }
+}
+
+

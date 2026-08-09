@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { createCircuit, updateCircuitStatus, deleteCircuit } from '../services/circuitService'
-import { createTournament } from '../services/tournamentService'
+import { createTournament, getTournaments, startTournament, deleteTournament } from '../services/tournamentService'
 import { sessionService } from '../services/sessionService'
 import Button from '../components/Button'
 import { supabase } from '../services/supabase'
@@ -33,6 +33,10 @@ export default function Admin() {
   const [tStartTime, setTStartTime] = useState('')
   const [tIsManual, setTIsManual] = useState(false)
   const [creatingT, setCreatingT] = useState(false)
+  const [tManualPlayers, setTManualPlayers] = useState('')
+  const [tournaments, setTournaments] = useState<any[]>([])
+  const [profiles, setProfiles] = useState<any[]>([])
+
 
   // Create Session State
   const [sName, setSName] = useState('')
@@ -54,8 +58,11 @@ export default function Admin() {
 
   useEffect(() => {
     fetchCircuits()
+    fetchTournaments()
+    fetchProfiles()
     fetchActiveChallenge()
   }, [])
+
 
   const fetchActiveChallenge = async () => {
     const { data } = await supabase
@@ -81,6 +88,16 @@ export default function Admin() {
         setChallengeTargetValue(data.value.target_value || '')
       }
     }
+  }
+
+  const fetchTournaments = async () => {
+    const { data } = await getTournaments(['upcoming', 'active'])
+    setTournaments(data || [])
+  }
+
+  const fetchProfiles = async () => {
+    const { data } = await supabase.from('profiles').select('id, username')
+    setProfiles(data || [])
   }
 
   const fetchCircuits = async () => {
@@ -109,6 +126,27 @@ export default function Admin() {
     if (success) {
       toast.success("CIRCUIT TERMINATED");
       fetchCircuits();
+    } else {
+      toast.error("TERMINATION FAILED: " + error?.message);
+    }
+  }
+
+  const handleStartTournament = async (id: string) => {
+    const { success, error } = await startTournament(id)
+    if (success) {
+      toast.success("TOURNAMENT STARTED")
+      fetchTournaments()
+    } else {
+      toast.error("START FAILED: " + error?.message)
+    }
+  }
+
+  const handleDeleteTournament = async (id: string) => {
+    if (!window.confirm("Are you sure you want to terminate this Tournament? This action is permanent.")) return;
+    const { success, error } = await deleteTournament(id);
+    if (success) {
+      toast.success("TOURNAMENT TERMINATED");
+      fetchTournaments();
     } else {
       toast.error("TERMINATION FAILED: " + error?.message);
     }
@@ -158,7 +196,7 @@ export default function Admin() {
   const handleCreateTournament = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreatingT(true)
-    const { success, error } = await createTournament({
+    const res = await createTournament({
       circuit_id: tCircuitId || null,
       name: tName,
       game: tGame,
@@ -168,16 +206,59 @@ export default function Admin() {
       start_time: tIsManual ? null : tStartTime,
       status: 'upcoming'
     })
-    setCreatingT(false)
-    if (success) {
+    
+    if (res.success && res.data) {
       toast.success("TOURNAMENT ESTABLISHED")
+      
+      // Parse and add manual players
+      if (tManualPlayers.trim()) {
+        const playerNames = tManualPlayers.split(',').map(name => name.trim()).filter(Boolean);
+        for (const name of playerNames) {
+          try {
+            let existingProfile = profiles.find(p => p.username.toLowerCase() === name.toLowerCase());
+            let userId = existingProfile?.id;
+            
+            if (!userId) {
+              const { data: newUserId, error: createError } = await supabase.rpc('create_manual_player', {
+                p_username: name,
+                p_mmr: 1000,
+                p_usr: 1000
+              });
+              
+              if (createError) {
+                toast.error(`Could not create manual player ${name}: ${createError.message}`);
+                continue;
+              }
+              userId = newUserId;
+            }
+            
+            const { error: regError } = await supabase
+              .from('tournament_participants')
+              .insert({ 
+                tournament_id: res.data.id, 
+                participant_id: userId
+              });
+              
+            if (regError) {
+              toast.error(`Could not register ${name} to tournament: ${regError.message}`);
+            }
+          } catch (e: any) {
+             console.error(e);
+          }
+        }
+      }
+
       setTName('')
       setTGame('')
       setTCircuitId('')
       setTStartTime('')
+      setTManualPlayers('')
+      fetchTournaments()
+      fetchProfiles()
     } else {
-      toast.error("ESTABLISHMENT FAILED: " + error?.message)
+      toast.error("ESTABLISHMENT FAILED: " + res.error?.message)
     }
+    setCreatingT(false)
   }
 
   const handleCreateSession = async (e: React.FormEvent) => {
@@ -345,6 +426,16 @@ export default function Admin() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="block text-[10px] font-mono uppercase tracking-widest text-ink-500 mb-1">Add Players (Optional Comma-separated List)</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Phil, Dan, MockPlayer" 
+                    className="w-full bg-steel-950 border border-steel-700 rounded p-2 text-ink-100 font-body text-sm mb-3" 
+                    value={tManualPlayers} 
+                    onChange={e=>setTManualPlayers(e.target.value)} 
+                  />
+                </div>
                 {!tIsManual && (
                   <div>
                     <label className="block text-[10px] font-mono uppercase tracking-widest text-ink-500 mb-1">Scheduled Start Time</label>
@@ -473,43 +564,93 @@ export default function Admin() {
               <Clock size={16} className="text-nexus-400" /> Deployment Control
             </h2>
             
-            <div className="space-y-3">
-              {loading ? (
-                <div className="text-[10px] text-ink-500 font-mono animate-pulse">SYNCHRONIZING WITH GRID...</div>
-              ) : circuits.length === 0 ? (
-                <div className="text-[10px] text-ink-600 font-mono italic">No active operations found.</div>
-              ) : circuits.map(c => (
-                <div key={c.id} className="bg-steel-950 border border-steel-800 p-4 rounded-lg flex items-center justify-between group hover:border-nexus-500/50 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`w-2 h-2 rounded-full ${c.status === 'active' ? 'bg-victory-500 animate-pulse' : 'bg-ink-700'}`} />
-                      <h3 className="text-xs font-black text-ink-100 truncate uppercase">{c.name}</h3>
+            <div className="space-y-6">
+              {/* Circuits Section */}
+              <div>
+                <h3 className="text-[10px] font-mono uppercase tracking-widest text-ink-500 mb-3 border-b border-steel-800 pb-1">Prestige Circuits</h3>
+                <div className="space-y-3">
+                  {loading ? (
+                    <div className="text-[10px] text-ink-500 font-mono animate-pulse">SYNCHRONIZING WITH GRID...</div>
+                  ) : circuits.length === 0 ? (
+                    <div className="text-[10px] text-ink-600 font-mono italic">No active operations found.</div>
+                  ) : circuits.map(c => (
+                    <div key={c.id} className="bg-steel-950 border border-steel-800 p-4 rounded-lg flex items-center justify-between group hover:border-nexus-500/50 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`w-2 h-2 rounded-full ${c.status === 'active' ? 'bg-victory-500 animate-pulse' : 'bg-ink-700'}`} />
+                          <h3 className="text-xs font-black text-ink-100 truncate uppercase">{c.name}</h3>
+                        </div>
+                        <div className="flex gap-3 text-[9px] font-mono text-ink-500 uppercase">
+                          <span>{c.status}</span>
+                          {c.is_manual && <span className="text-nexus-400 px-1 bg-nexus-900/20 border border-nexus-900">MANUAL</span>}
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {c.status === 'upcoming' && (
+                          <button 
+                            onClick={() => handleStartCircuit(c.id)}
+                            className="bg-victory-900/20 hover:bg-victory-900/40 text-victory-500 border border-victory-500/30 px-3 py-1.5 rounded text-[10px] font-black uppercase flex items-center gap-2 transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <Play size={10} fill="currentColor" /> Start Now
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleDeleteCircuit(c.id)}
+                          className="bg-threat-900/20 hover:bg-threat-900/45 text-threat-500 border border-threat-500/30 p-1.5 rounded transition-all opacity-0 group-hover:opacity-100 flex items-center justify-center"
+                          title="Terminate Operation"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex gap-3 text-[9px] font-mono text-ink-500 uppercase">
-                      <span>{c.status}</span>
-                      {c.is_manual && <span className="text-nexus-400 px-1 bg-nexus-900/20 border border-nexus-900">MANUAL</span>}
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    {c.status === 'upcoming' && (
-                      <button 
-                        onClick={() => handleStartCircuit(c.id)}
-                        className="bg-victory-900/20 hover:bg-victory-900/40 text-victory-500 border border-victory-500/30 px-3 py-1.5 rounded text-[10px] font-black uppercase flex items-center gap-2 transition-all opacity-0 group-hover:opacity-100"
-                      >
-                        <Play size={10} fill="currentColor" /> Start Now
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => handleDeleteCircuit(c.id)}
-                      className="bg-threat-900/20 hover:bg-threat-900/45 text-threat-500 border border-threat-500/30 p-1.5 rounded transition-all opacity-0 group-hover:opacity-100 flex items-center justify-center"
-                      title="Terminate Operation"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              {/* Tournaments Section */}
+              <div>
+                <h3 className="text-[10px] font-mono uppercase tracking-widest text-ink-500 mb-3 border-b border-steel-800 pb-1">Standalone Tournaments</h3>
+                <div className="space-y-3">
+                  {loading ? (
+                    <div className="text-[10px] text-ink-500 font-mono animate-pulse">SYNCHRONIZING WITH GRID...</div>
+                  ) : tournaments.length === 0 ? (
+                    <div className="text-[10px] text-ink-600 font-mono italic">No standalone tournaments found.</div>
+                  ) : tournaments.map(t => (
+                    <div key={t.id} className="bg-steel-950 border border-steel-800 p-4 rounded-lg flex items-center justify-between group hover:border-nexus-500/50 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`w-2 h-2 rounded-full ${t.status === 'active' ? 'bg-victory-500 animate-pulse' : 'bg-ink-700'}`} />
+                          <h3 className="text-xs font-black text-ink-100 truncate uppercase">{t.name}</h3>
+                        </div>
+                        <div className="flex gap-3 text-[9px] font-mono text-ink-500 uppercase">
+                          <span>{t.status}</span>
+                          <span className="text-ink-600">{t.game}</span>
+                          {t.is_manual && <span className="text-nexus-400 px-1 bg-nexus-900/20 border border-nexus-900">MANUAL</span>}
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {t.status === 'upcoming' && (
+                          <button 
+                            onClick={() => handleStartTournament(t.id)}
+                            className="bg-victory-900/20 hover:bg-victory-900/40 text-victory-500 border border-victory-500/30 px-3 py-1.5 rounded text-[10px] font-black uppercase flex items-center gap-2 transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <Play size={10} fill="currentColor" /> Start Now
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleDeleteTournament(t.id)}
+                          className="bg-threat-900/20 hover:bg-threat-900/45 text-threat-500 border border-threat-500/30 p-1.5 rounded transition-all opacity-0 group-hover:opacity-100 flex items-center justify-center"
+                          title="Terminate Tournament"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>

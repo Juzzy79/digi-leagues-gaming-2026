@@ -202,10 +202,18 @@ export default function Tournaments() {
       sessionService.getAllSessions()
     ]).then(([tournamentsRes, circuitsRes, sessionsRes]) => {
       if (cancelled) return
-      setTournaments(tournamentsRes.data || [])
+      const tours = tournamentsRes.data || []
+      setTournaments(tours)
       setCircuits(circuitsRes.data || [])
       setSessions(sessionsRes.data || [])
       setLoading(false)
+
+      // Auto-select tournament from query param if present
+      const params = new URLSearchParams(window.location.search);
+      const selectId = params.get('select');
+      if (selectId && tours.some(t => t.id === selectId)) {
+        setViewingTournamentId(selectId);
+      }
     })
     return () => { cancelled = true }
   }, [])
@@ -801,8 +809,8 @@ export default function Tournaments() {
                                    className="px-8 italic font-black tracking-widest bg-nexus-500 text-steel-950 hover:bg-nexus-400"
                                 >
                                    {registering ? 'ENROLLING...' : isRegistered ? (
-                                      <span className="flex items-center gap-2"><CheckCircle size={16} /> DEPLOYED</span>
-                                   ) : 'ENGAGE OPS (SELF-REGISTER)'}
+                                      <span className="flex items-center gap-2"><CheckCircle size={16} /> REGISTERED</span>
+                                   ) : 'REGISTER TO PLAY'}
                                 </Button>
 
                                 {isAdmin && (
