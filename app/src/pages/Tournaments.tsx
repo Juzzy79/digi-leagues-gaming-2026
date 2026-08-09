@@ -180,7 +180,7 @@ export default function Tournaments() {
   const [isRegistered, setIsRegistered] = useState(false)
   const [registering, setRegistering] = useState(false)
   const [reportingMatch, setReportingMatch] = useState<TournamentMatch | null>(null)
-  const [gameResults, setGameResults] = useState<{winner: 'p1'|'p2'|null, p1Perfect: boolean, p2Perfect: boolean}[]>([{ winner: null, p1Perfect: false, p2Perfect: false }]);
+  const [gameResults, setGameResults] = useState<{winner: 'p1'|'p2'|null, p1Perfect: boolean, p2Perfect: boolean, score1?: number, score2?: number}[]>([{ winner: null, p1Perfect: false, p2Perfect: false, score1: 0, score2: 0 }]);
 
   // Roster & Admin Creation State
   const [rosterRegistrations, setRosterRegistrations] = useState<any[]>([])
@@ -256,12 +256,26 @@ export default function Tournaments() {
 
     const winnerId = s1 > s2 ? reportingMatch.player1_id! : (s2 > s1 ? reportingMatch.player2_id! : null)
     
-    // We pass s1 and s2 to updateMatchScore
-    const { success, error } = await updateMatchScore(reportingMatch.id, s1, s2, winnerId || '')
+    // Construct series game stats if this is a standalone series format
+    const isSeries = viewingTournament?.format === 'standalone_series';
+    let genreStats = null;
+    if (isSeries && reportingMatch) {
+       genreStats = {
+          team1_name: reportingMatch.genre_stats?.team1_name || 'Team A',
+          team2_name: reportingMatch.genre_stats?.team2_name || 'Team B',
+          games: gameResults.map(g => ({
+             winner: g.winner,
+             score1: g.score1 || 0,
+             score2: g.score2 || 0
+          }))
+       };
+    }
+
+    const { success, error } = await updateMatchScore(reportingMatch.id, s1, s2, winnerId || '', genreStats)
     if (success) {
       toast.success("SCORE LOGGED")
       setReportingMatch(null)
-      setGameResults([{ winner: null, p1Perfect: false, p2Perfect: false }])
+      setGameResults([{ winner: null, p1Perfect: false, p2Perfect: false, score1: 0, score2: 0 }])
       // Refresh matches
       if (viewingTournamentId) {
          const res = await getTournamentMatches(viewingTournamentId)
@@ -747,6 +761,79 @@ export default function Tournaments() {
                             </div>
                          </div>
                        )}
+
+                        {viewingTournament.format === 'standalone_series' && (
+                          <div className="max-w-2xl mx-auto bg-steel-900 border border-steel-750 p-6 rounded-2xl shadow-2xl space-y-6">
+                            {(() => {
+                               const match = tournamentMatches[0];
+                               if (!match) return <div className="text-center font-mono text-ink-600 text-xs py-12">INITIALIZING STANDALONE SERIES...</div>;
+                               
+                               const teams: Record<string, any[]> = {};
+                               rosterRegistrations.forEach(r => {
+                                  const tName = r.team_name || 'Individual';
+                                  if (!teams[tName]) teams[tName] = [];
+                                  teams[tName].push(r.profiles?.username || 'Unknown');
+                                });
+                               
+                               const teamNames = Object.keys(teams);
+                               const teamA = teamNames[0] || match.genre_stats?.team1_name || 'Team A';
+                               const teamB = teamNames[1] || match.genre_stats?.team2_name || 'Team B';
+                               
+                               const games = match.genre_stats?.games || [];
+                               
+                               return (
+                                  <div className="space-y-8">
+                                     <div className="flex justify-between items-center bg-steel-950 p-6 rounded-xl border border-steel-800 relative">
+                                        <div className="text-center flex-1 space-y-1">
+                                           <h4 className="text-lg font-black text-ink-100 uppercase tracking-widest">{teamA}</h4>
+                                           <p className="text-[10px] font-mono text-ink-500 uppercase">{teams[teamA]?.join(', ') || 'Players unassigned'}</p>
+                                        </div>
+                                        
+                                        <div className="px-6 flex flex-col items-center shrink-0">
+                                           <span className="text-[10px] font-mono uppercase text-nexus-400 tracking-widest mb-2">Series (Bo{viewingTournament.best_of})</span>
+                                           <div className="text-3xl font-display font-black text-victory-400 tracking-wider">
+                                              {match.status === 'completed' || match.status === 'reported' ? `${match.score1} - ${match.score2}` : '0 - 0'}
+                                           </div>
+                                           <span className="text-[9px] font-mono text-ink-600 uppercase mt-2">{match.status}</span>
+                                        </div>
+
+                                        <div className="text-center flex-1 space-y-1">
+                                           <h4 className="text-lg font-black text-ink-100 uppercase tracking-widest">{teamB}</h4>
+                                           <p className="text-[10px] font-mono text-ink-500 uppercase">{teams[teamB]?.join(', ') || 'Players unassigned'}</p>
+                                        </div>
+                                     </div>
+
+                                     <div className="space-y-3">
+                                        <h5 className="text-[10px] font-mono text-ink-500 uppercase tracking-widest border-b border-steel-800 pb-2">Game-by-Game Scoreboard</h5>
+                                        {games.length === 0 ? (
+                                           <div className="text-center font-mono text-ink-600 text-xs py-8 bg-steel-950/20 rounded-xl border border-steel-850">No games logged yet.</div>
+                                        ) : (
+                                           <div className="space-y-2">
+                                              {games.map((g: any, idx: number) => (
+                                                 <div key={idx} className="flex justify-between items-center bg-steel-950/40 border border-steel-850 px-4 py-3 rounded-lg text-xs font-mono">
+                                                    <span className="text-ink-400 font-bold">Game {idx + 1}</span>
+                                                    <span className="text-ink-500">{g.winner === 'p1' ? teamA : teamB} Wins</span>
+                                                    <span className="text-ink-300 font-black">{g.score1} - {g.score2}</span>
+                                                 </div>
+                                              ))}
+                                           </div>
+                                        )}
+                                     </div>
+
+                                     {isAdmin && match.status === 'scheduled' && (
+                                        <Button 
+                                           variant="primary" 
+                                           onClick={() => setReportingMatch(match)}
+                                           className="w-full uppercase font-black text-xs tracking-widest bg-victory-500 text-steel-950 hover:bg-victory-400 py-3"
+                                        >
+                                           Log Series Results
+                                        </Button>
+                                     )}
+                                  </div>
+                               );
+                            })()}
+                          </div>
+                        )}
                     </div>
                   ) : (
                     <div className="animate-in fade-in duration-500 space-y-12">
@@ -776,7 +863,46 @@ export default function Tournaments() {
                                 <div className="py-12 text-center text-ink-600 font-mono text-xs uppercase animate-pulse">Scanning Roster...</div>
                              ) : rosterRegistrations.length === 0 ? (
                                 <div className="py-12 text-center text-ink-600 font-mono text-xs uppercase border border-dashed border-steel-800 rounded-xl bg-steel-950/20">No Operators deployed yet.</div>
-                             ) : (
+                             ) : viewingTournament.entry_type === 'team' ? (
+                                 <div className="space-y-6">
+                                    {(() => {
+                                       const teams: Record<string, any[]> = {};
+                                       rosterRegistrations.forEach(reg => {
+                                          const tName = reg.team_name || 'Individual / Unassigned';
+                                          if (!teams[tName]) teams[tName] = [];
+                                          teams[tName].push(reg);
+                                       });
+                                       return Object.entries(teams).map(([teamName, players]) => (
+                                          <div key={teamName} className="bg-steel-950/40 border border-steel-800 p-5 rounded-2xl space-y-3">
+                                             <h5 className="text-xs font-mono font-black uppercase tracking-widest text-nexus-400 border-b border-steel-800 pb-2">
+                                                {teamName} ({players.length} / {viewingTournament.scoring_rules?.team_size || 2})
+                                             </h5>
+                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                {players.map((reg) => (
+                                                   <div key={reg.id} className="flex justify-between items-center p-3 bg-steel-900/40 border border-steel-850 rounded-xl hover:border-steel-750 transition-colors">
+                                                      <div>
+                                                         <div className="text-sm font-bold text-ink-100">{reg.profiles?.username}</div>
+                                                         <div className="text-[10px] font-mono text-ink-500 mt-0.5">MMR: {reg.profiles?.mmr}</div>
+                                                      </div>
+                                                      <div className="flex items-center gap-2">
+                                                         {isAdmin && (
+                                                            <button 
+                                                               onClick={() => handleRemovePlayer(reg.participant_id, reg.profiles?.username || 'Operator')}
+                                                               className="p-2 bg-threat-950/30 hover:bg-threat-900/50 border border-threat-900/30 hover:border-threat-500/50 rounded-xl text-threat-400 hover:text-threat-200 transition-all active:scale-95"
+                                                               title="Remove operator"
+                                                            >
+                                                               <Trash2 size={14} />
+                                                            </button>
+                                                         )}
+                                                      </div>
+                                                   </div>
+                                                ))}
+                                             </div>
+                                          </div>
+                                       ));
+                                    })()}
+                                 </div>
+                              ) : (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                    {rosterRegistrations.map((reg) => (
                                       <div key={reg.id} className="flex justify-between items-center p-4 bg-steel-900/50 border border-steel-800 rounded-2xl hover:border-steel-700 transition-colors">
@@ -970,54 +1096,98 @@ export default function Tournaments() {
                   <h2 className="text-xl font-display font-black text-ink-50 uppercase tracking-widest">Log Mission Results</h2>
                </div>
                
-               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-6">
-                  <div className="flex justify-between items-end border-b border-steel-800 pb-4 mb-4">
-                     <div className="text-center w-1/2">
-                        <span className="text-3xl font-bold text-ink-50 block mb-1">{gameResults.filter(g => g.winner === 'p1').length}</span>
-                        <label className="text-[10px] text-ink-500 uppercase font-mono tracking-widest font-bold block line-clamp-1 px-2">{reportingMatch.player1?.username || 'P1 UNIT'}</label>
-                     </div>
-                     <div className="text-center w-1/2">
-                        <span className="text-3xl font-bold text-ink-50 block mb-1">{gameResults.filter(g => g.winner === 'p2').length}</span>
-                        <label className="text-[10px] text-ink-500 uppercase font-mono tracking-widest font-bold block line-clamp-1 px-2">{reportingMatch.player2?.username || 'P2 UNIT'}</label>
-                     </div>
-                  </div>
+               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-6">                   {(() => {
+                      const isSeries = viewingTournament?.format === 'standalone_series';
+                      const team1Name = isSeries ? (reportingMatch.genre_stats?.team1_name || 'Team A') : (reportingMatch.player1?.username || 'Player A');
+                      const team2Name = isSeries ? (reportingMatch.genre_stats?.team2_name || 'Team B') : (reportingMatch.player2?.username || 'Player B');
+                      
+                      return (
+                         <>
+                            <div className="flex justify-between items-end border-b border-steel-800 pb-4 mb-4">
+                               <div className="text-center w-1/2">
+                                  <span className="text-3xl font-bold text-ink-50 block mb-1">{gameResults.filter(g => g.winner === 'p1').length}</span>
+                                  <label className="text-[10px] text-ink-500 uppercase font-mono tracking-widest font-bold block line-clamp-1 px-2">{team1Name}</label>
+                               </div>
+                               <div className="text-center w-1/2">
+                                  <span className="text-3xl font-bold text-ink-50 block mb-1">{gameResults.filter(g => g.winner === 'p2').length}</span>
+                                  <label className="text-[10px] text-ink-500 uppercase font-mono tracking-widest font-bold block line-clamp-1 px-2">{team2Name}</label>
+                               </div>
+                            </div>
 
-                  <div className="space-y-4">
-                     {gameResults.map((game, idx) => (
-                        <div key={idx} className="bg-steel-950/50 border border-steel-800 rounded-2xl p-4">
-                           <div className="text-xs text-ink-500 uppercase font-mono tracking-widest font-bold mb-4 flex justify-between items-center">
-                              <span>Game {idx + 1}</span>
-                              {gameResults.length > 1 && (
-                                 <button onClick={() => setGameResults(gameResults.filter((_, i) => i !== idx))} className="text-ink-500 hover:text-threat-500 transition-colors"><X size={14}/></button>
-                              )}
-                           </div>
-                           <div className="flex gap-4">
-                              <div className="flex-1 space-y-3">
-                                 <Button size="sm" variant={game.winner === 'p1' ? 'primary' : 'ghost'} className={`w-full font-bold uppercase tracking-widest text-[10px] ${game.winner === 'p1' ? 'bg-victory-500 text-steel-950 border-victory-500 hover:bg-victory-400' : 'text-ink-400 border-steel-700'}`} onClick={() => { const newResults = [...gameResults]; newResults[idx].winner = 'p1'; newResults[idx].p2Perfect = false; setGameResults(newResults); }}>P1 WON</Button>
-                                 {game.winner === 'p1' && (
-                                    <label className="flex items-center gap-2 text-[10px] uppercase font-mono font-bold text-ink-400 cursor-pointer justify-center select-none animate-in fade-in">
-                                       <input type="checkbox" checked={game.p1Perfect} onChange={e => { const newResults = [...gameResults]; newResults[idx].p1Perfect = e.target.checked; setGameResults(newResults); }} className="rounded border-steel-700 bg-steel-900 text-nexus-500 focus:ring-nexus-500 focus:ring-offset-steel-900 w-3 h-3" />
-                                       Perfect
-                                    </label>
-                                 )}
-                              </div>
-                              <div className="flex-1 space-y-3">
-                                 <Button size="sm" variant={game.winner === 'p2' ? 'primary' : 'ghost'} className={`w-full font-bold uppercase tracking-widest text-[10px] ${game.winner === 'p2' ? 'bg-victory-500 text-steel-950 border-victory-500 hover:bg-victory-400' : 'text-ink-400 border-steel-700'}`} onClick={() => { const newResults = [...gameResults]; newResults[idx].winner = 'p2'; newResults[idx].p1Perfect = false; setGameResults(newResults); }}>P2 WON</Button>
-                                 {game.winner === 'p2' && (
-                                    <label className="flex items-center gap-2 text-[10px] uppercase font-mono font-bold text-ink-400 cursor-pointer justify-center select-none animate-in fade-in">
-                                       <input type="checkbox" checked={game.p2Perfect} onChange={e => { const newResults = [...gameResults]; newResults[idx].p2Perfect = e.target.checked; setGameResults(newResults); }} className="rounded border-steel-700 bg-steel-900 text-nexus-500 focus:ring-nexus-500 focus:ring-offset-steel-900 w-3 h-3" />
-                                       Perfect
-                                    </label>
-                                 )}
-                              </div>
-                           </div>
-                        </div>
-                     ))}
-                  </div>
-                  
-                  <Button variant="ghost" className="w-full border border-dashed border-steel-700 text-ink-500 hover:text-ink-200 mt-2 font-mono uppercase text-[10px] tracking-widest py-3" onClick={() => setGameResults([...gameResults, { winner: null, p1Perfect: false, p2Perfect: false }])}>
-                     <Plus size={14} className="mr-2" /> Add Next Game
-                  </Button>
+                            <div className="space-y-4">
+                               {gameResults.map((game, idx) => (
+                                  <div key={idx} className="bg-steel-950/50 border border-steel-800 rounded-2xl p-4">
+                                     <div className="text-xs text-ink-500 uppercase font-mono tracking-widest font-bold mb-4 flex justify-between items-center">
+                                        <span>Game {idx + 1}</span>
+                                        {gameResults.length > 1 && (
+                                           <button onClick={() => setGameResults(gameResults.filter((_, i) => i !== idx))} className="text-ink-500 hover:text-threat-500 transition-colors"><X size={14}/></button>
+                                        )}
+                                     </div>
+                                     <div className="flex gap-4">
+                                        <div className="flex-1 space-y-3">
+                                           <Button size="sm" variant={game.winner === 'p1' ? 'primary' : 'ghost'} className={`w-full font-bold uppercase tracking-widest text-[10px] ${game.winner === 'p1' ? 'bg-victory-500 text-steel-950 border-victory-500 hover:bg-victory-400' : 'text-ink-400 border-steel-700'}`} onClick={() => { const newResults = [...gameResults]; newResults[idx].winner = 'p1'; newResults[idx].p2Perfect = false; setGameResults(newResults); }}>
+                                              {isSeries ? 'TEAM A WON' : 'P1 WON'}
+                                           </Button>
+                                           {!isSeries && game.winner === 'p1' && (
+                                              <label className="flex items-center gap-2 text-[10px] uppercase font-mono font-bold text-ink-400 cursor-pointer justify-center select-none animate-in fade-in">
+                                                 <input type="checkbox" checked={game.p1Perfect} onChange={e => { const newResults = [...gameResults]; newResults[idx].p1Perfect = e.target.checked; setGameResults(newResults); }} className="rounded border-steel-700 bg-steel-900 text-nexus-500 focus:ring-nexus-500 focus:ring-offset-steel-900 w-3 h-3" />
+                                                 Perfect
+                                              </label>
+                                           )}
+                                        </div>
+                                        <div className="flex-1 space-y-3">
+                                           <Button size="sm" variant={game.winner === 'p2' ? 'primary' : 'ghost'} className={`w-full font-bold uppercase tracking-widest text-[10px] ${game.winner === 'p2' ? 'bg-victory-500 text-steel-950 border-victory-500 hover:bg-victory-400' : 'text-ink-400 border-steel-700'}`} onClick={() => { const newResults = [...gameResults]; newResults[idx].winner = 'p2'; newResults[idx].p1Perfect = false; setGameResults(newResults); }}>
+                                              {isSeries ? 'TEAM B WON' : 'P2 WON'}
+                                           </Button>
+                                           {!isSeries && game.winner === 'p2' && (
+                                              <label className="flex items-center gap-2 text-[10px] uppercase font-mono font-bold text-ink-400 cursor-pointer justify-center select-none animate-in fade-in">
+                                                 <input type="checkbox" checked={game.p2Perfect} onChange={e => { const newResults = [...gameResults]; newResults[idx].p2Perfect = e.target.checked; setGameResults(newResults); }} className="rounded border-steel-700 bg-steel-900 text-nexus-500 focus:ring-nexus-500 focus:ring-offset-steel-900 w-3 h-3" />
+                                                 Perfect
+                                              </label>
+                                           )}
+                                        </div>
+                                     </div>
+
+                                     {isSeries && (
+                                        <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-steel-900/40">
+                                           <div>
+                                              <label className="block text-[9px] font-mono uppercase tracking-widest text-ink-500 mb-1">{team1Name} Score</label>
+                                              <input 
+                                                 type="number" 
+                                                 className="w-full bg-steel-900 border border-steel-800 rounded p-1.5 text-xs text-ink-200 text-center font-mono"
+                                                 value={game.score1 || 0}
+                                                 onChange={e => {
+                                                    const newResults = [...gameResults];
+                                                    newResults[idx].score1 = parseInt(e.target.value) || 0;
+                                                    setGameResults(newResults);
+                                                 }}
+                                              />
+                                           </div>
+                                           <div>
+                                              <label className="block text-[9px] font-mono uppercase tracking-widest text-ink-500 mb-1">{team2Name} Score</label>
+                                              <input 
+                                                 type="number" 
+                                                 className="w-full bg-steel-900 border border-steel-800 rounded p-1.5 text-xs text-ink-200 text-center font-mono"
+                                                 value={game.score2 || 0}
+                                                 onChange={e => {
+                                                    const newResults = [...gameResults];
+                                                    newResults[idx].score2 = parseInt(e.target.value) || 0;
+                                                    setGameResults(newResults);
+                                                 }}
+                                              />
+                                           </div>
+                                        </div>
+                                     )}
+                                  </div>
+                               ))}
+                            </div>
+                            
+                            <Button variant="ghost" className="w-full border border-dashed border-steel-700 text-ink-500 hover:text-ink-200 mt-2 font-mono uppercase text-[10px] tracking-widest py-3" onClick={() => setGameResults([...gameResults, { winner: null, p1Perfect: false, p2Perfect: false, score1: 0, score2: 0 }])}>
+                               <Plus size={14} className="mr-2" /> Add Next Game
+                            </Button>
+                         </>
+                      );
+                   })()}
                </div>
 
                <div className="flex gap-4 mt-8 pt-6 border-t border-steel-800 shrink-0">

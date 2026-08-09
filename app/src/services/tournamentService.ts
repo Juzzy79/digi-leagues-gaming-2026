@@ -279,7 +279,7 @@ export async function startTournament(tournamentId: string) {
     // 2. Fetch participants
     const { data: participants, error: pErr } = await supabase
       .from('tournament_participants')
-      .select('id, participant_id')
+      .select('id, participant_id, team_name')
       .eq('tournament_id', tournamentId);
 
     if (pErr) throw pErr;
@@ -429,6 +429,36 @@ export async function startTournament(tournamentId: string) {
         status: 'scheduled'
       });
       if (insertErr) throw insertErr;
+    } else if (format === 'standalone_series') {
+      const teamsMap: Record<string, any[]> = {};
+      participants.forEach(p => {
+        const tName = p.team_name || 'Individual';
+        if (!teamsMap[tName]) teamsMap[tName] = [];
+        teamsMap[tName].push(p);
+      });
+
+      const teamNames = Object.keys(teamsMap);
+      if (teamNames.length !== 2) {
+        throw new Error("Standalone Series format requires exactly 2 teams to start.");
+      }
+
+      const p1 = teamsMap[teamNames[0]][0].id;
+      const p2 = teamsMap[teamNames[1]][0].id;
+
+      const { error: insertErr } = await supabase.from('matches').insert({
+        tournament_id: tournamentId,
+        round: 1,
+        bracket_match_id: 'SERIES-M1',
+        participant1_id: p1,
+        participant2_id: p2,
+        status: 'scheduled',
+        genre_stats: {
+          team1_name: teamNames[0],
+          team2_name: teamNames[1],
+          games: []
+        }
+      });
+      if (insertErr) throw insertErr;
     }
 
     return { success: true };
@@ -561,22 +591,41 @@ async function advanceBracket(completedMatch: any, allTournamentMatches: any[]) 
   }
 }
 
-export async function updateMatchScore(matchId: string, score1: number, score2: number, winnerId: string) {
+export async function updateMatchScore(matchId: string, score1: number, score2: number, winnerId: string, genreStats?: any) {
   try {
+    const updateData: any = {
+      score1,
+      score2,
+      winner_id: winnerId,
+      status: 'completed'
+    };
+    if (genreStats) {
+      updateData.genre_stats = genreStats;
+    }
+
     // Update match score in matches table
     const { data: updatedMatch, error } = await supabase
       .from('matches')
-      .update({
-        score1,
-        score2,
-        winner_id: winnerId,
-        status: 'completed'
-      })
+      .update(updateData)
       .eq('id', matchId)
       .select()
       .single();
 
     if (error) throw error;
+
+    // Fetch tournament format
+    const { data: tournament } = await supabase
+      .from('tournaments')
+      .select('format')
+      .eq('id', updatedMatch.tournament_id)
+      .single();
+
+    if (tournament && tournament.format === 'standalone_series') {
+      if (winnerId && updatedMatch.tournament_id) {
+        await completeTournament(updatedMatch.tournament_id, winnerId);
+      }
+      return { success: true, error: null };
+    }
 
     // Advance bracket / league progression
     const { data: allMatches } = await supabase

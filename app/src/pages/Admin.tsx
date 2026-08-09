@@ -36,6 +36,7 @@ export default function Admin() {
   const [tManualPlayers, setTManualPlayers] = useState('')
   const [tournaments, setTournaments] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
+  const [tTeamSize, setTTeamSize] = useState(2)
 
 
   // Create Session State
@@ -204,7 +205,8 @@ export default function Admin() {
       entry_type: tEntryType as any,
       best_of: tBestOf,
       start_time: tIsManual ? null : tStartTime,
-      status: 'upcoming'
+      status: 'upcoming',
+      scoring_rules: tEntryType === 'team' ? { win: 3, loss: 0, draw: 1, team_size: tTeamSize } : { win: 3, loss: 0, draw: 1 }
     })
     
     if (res.success && res.data) {
@@ -398,6 +400,7 @@ export default function Admin() {
                       <option value="single_elimination">Single Elimination</option>
                       <option value="double_elimination">Double Elimination</option>
                       <option value="round_robin">Round Robin / League</option>
+                      <option value="standalone_series">Standalone Series</option>
                     </select>
                   </div>
                   <div>
@@ -417,6 +420,17 @@ export default function Admin() {
                     </select>
                   </div>
                 </div>
+                {tEntryType === 'team' && (
+                  <div>
+                    <label className="block text-[10px] font-mono uppercase tracking-widest text-ink-500 mb-1">Team Size (Entrants per Team)</label>
+                    <select className="w-full bg-steel-950 border border-steel-700 rounded p-2 text-ink-100 font-body text-sm" value={tTeamSize} onChange={e=>setTTeamSize(parseInt(e.target.value))}>
+                      <option value={2}>2 players</option>
+                      <option value={3}>3 players</option>
+                      <option value={4}>4 players</option>
+                      <option value={5}>5 players</option>
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-[10px] font-mono uppercase tracking-widest text-ink-500 mb-1">Parent Circuit (Optional)</label>
                   <select className="w-full bg-steel-950 border border-steel-700 rounded p-2 text-ink-100 font-body text-sm" value={tCircuitId} onChange={e=>setTCircuitId(e.target.value)}>
