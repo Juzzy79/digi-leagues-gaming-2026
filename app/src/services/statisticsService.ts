@@ -240,23 +240,23 @@ export function generateWarRoomStats(history: any[]): WarRoomStats {
   const personalBests: Record<string, any> = {};
 
   racingMatches.forEach(m => {
-    const track = m.stats.track_name;
+    const track = m.stats?.track_name;
     if (!track) return;
     
-    if (m.stats.total_time) racesCount++;
+    if (m.stats?.total_time) racesCount++;
     else lapsCount++; 
 
     if (!personalBests[track]) {
       personalBests[track] = { bestLap: 999999, totalTime: 999999 };
     }
 
-    if (m.stats.best_lap && m.stats.best_lap < personalBests[track].bestLap) {
+    if (m.stats?.best_lap && m.stats.best_lap < personalBests[track].bestLap) {
       personalBests[track].bestLap = m.stats.best_lap;
-      personalBests[track].bestLapCar = m.stats.car_name;
+      personalBests[track].bestLapCar = m.stats?.car_name;
     }
-    if (m.stats.total_time && m.stats.total_time < personalBests[track].totalTime) {
+    if (m.stats?.total_time && m.stats.total_time < personalBests[track].totalTime) {
       personalBests[track].totalTime = m.stats.total_time;
-      personalBests[track].totalTimeCar = m.stats.car_name;
+      personalBests[track].totalTimeCar = m.stats?.car_name;
     }
   });
 

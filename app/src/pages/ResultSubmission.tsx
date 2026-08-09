@@ -333,6 +333,12 @@ export default function ResultSubmission() {
         <div className="h-1 w-32 bg-nexus-500 mt-2 mx-auto shadow-[0_0_10px_rgba(45,212,191,0.5)]" />
       </div>
 
+      <div className="mb-8 p-5 bg-steel-900/40 border border-steel-800 rounded-2xl text-center">
+        <p className="text-xs text-ink-400 leading-relaxed font-sans uppercase tracking-wider">
+           💡 <span className="font-bold text-nexus-400">Play Anything, Log Everything:</span> You can submit scores for a variety of games, even if they aren't listed here! Select <span className="font-bold text-pulse-400 font-mono">"+ ADD NEW GAME..."</span> below to enter any game you are currently playing to build up your rank, career progression, and skill points.
+        </p>
+      </div>
+
       <form onSubmit={handleSubmit} className="bg-steel-950 border border-steel-700 p-6 lg:p-8 shadow-2xl relative space-y-8">
         <div className="absolute top-0 right-0 p-2 text-[10px] text-steel-700">NODE: DL_GS_04</div>
         

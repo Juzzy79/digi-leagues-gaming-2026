@@ -7,20 +7,24 @@ import type { WarRoomStats } from '../services/statisticsService'
 import { 
   Activity, Target, Trophy, Skull, Users, 
   TrendingUp, Crosshair, Crown, Clock, 
-  MapPin, Flag, Car, Medal, Hash
+  MapPin, Flag, Car, Medal, Hash, Edit3, ClipboardList
 } from 'lucide-react'
 import Button from '../components/Button'
+import EditMatchModal from '../components/EditMatchModal'
 
 export default function WarRoom() {
   const { user } = useAuth()
   const [stats, setStats] = useState<WarRoomStats | null>(null)
+  const [matchHistory, setMatchHistory] = useState<any[]>([])
+  const [editingMatch, setEditingMatch] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'overview' | 'advanced' | 'coop' | 'racing'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'advanced' | 'coop' | 'racing' | 'ledger'>('overview')
 
   useEffect(() => {
     if (user) {
       getMatchHistory(user.id).then(({ data }) => {
         if (data) {
+          setMatchHistory(data)
           setStats(generateWarRoomStats(data))
         }
         setLoading(false)
@@ -58,7 +62,8 @@ export default function WarRoom() {
             { id: 'overview', icon: Target, label: 'COMMAND' },
             { id: 'advanced', icon: TrendingUp, label: 'ANALYTICS' },
             { id: 'coop', icon: Users, label: 'NEMESIS / CO-OP' },
-            { id: 'racing', icon: Flag, label: 'RACING' }
+            { id: 'racing', icon: Flag, label: 'RACING' },
+            { id: 'ledger', icon: ClipboardList, label: 'LEDGER' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -69,7 +74,7 @@ export default function WarRoom() {
                   : 'text-ink-500 hover:text-ink-300'
               }`}
             >
-              <tab.icon size={14} /> {label.label}
+              <tab.icon size={14} /> {tab.label}
             </button>
           ))}
         </div>
@@ -340,7 +345,89 @@ export default function WarRoom() {
             </div>
           </div>
         )}
+        {activeTab === 'ledger' && (
+          <div className="bg-steel-950 border border-steel-800 p-6 space-y-6">
+            <div className="flex items-center justify-between border-b border-steel-800 pb-4">
+              <h3 className="text-sm font-display font-black text-ink-100 tracking-widest uppercase flex items-center gap-2">
+                <ClipboardList size={16} className="text-nexus-500" /> Match Ledger
+              </h3>
+              <p className="text-[10px] text-ink-500 font-mono uppercase tracking-widest">Last 50 Operations</p>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse font-mono">
+                <thead>
+                  <tr className="border-b border-steel-800 text-[10px] uppercase tracking-widest text-ink-500">
+                    <th className="py-3 px-4 font-bold">Timestamp</th>
+                    <th className="py-3 px-4 font-bold">Operation</th>
+                    <th className="py-3 px-4 font-bold">Result</th>
+                    <th className="py-3 px-4 font-bold">Metadata</th>
+                    <th className="py-3 px-4 font-bold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matchHistory.map(match => (
+                    <tr key={match.id} className="border-b border-steel-800/50 hover:bg-steel-900/30 transition-colors">
+                      <td className="py-3 px-4 text-[10px] text-ink-400">
+                        {new Date(match.created_at).toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-bold text-xs text-ink-100 uppercase">{match.game}</div>
+                        <div className="text-[9px] text-ink-500 uppercase tracking-widest">{match.genre}</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest ${
+                          match.result === 'Win' ? 'bg-victory-500/20 text-victory-400 border border-victory-500/30' :
+                          match.result === 'Loss' ? 'bg-threat-500/20 text-threat-400 border border-threat-500/30' :
+                          'bg-pulse-500/20 text-pulse-400 border border-pulse-500/30'
+                        }`}>
+                          {match.result}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-[9px] text-ink-500">
+                        {match.stats?.rival && <div className="text-threat-400">Nemesis: {match.stats.rival.name}</div>}
+                        {match.stats?.teammates && <div className="text-duel-400">Squad: {match.stats.teammates.length} OP</div>}
+                        {match.stats?.car_name && <div className="text-nexus-400">Veh: {match.stats.car_name}</div>}
+                        {!match.stats?.rival && !match.stats?.teammates && !match.stats?.car_name && '--'}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-[10px] px-2 py-1 flex items-center gap-1 ml-auto border border-steel-700"
+                          onClick={() => setEditingMatch(match)}
+                        >
+                          <Edit3 size={12} /> Edit Metadata
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {matchHistory.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-xs text-ink-500 border-dashed border-t border-b border-steel-800">
+                        NO LEDGER ENTRIES FOUND
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </motion.div>
+
+      {editingMatch && (
+        <EditMatchModal 
+          match={editingMatch}
+          onClose={() => setEditingMatch(null)}
+          onSave={(updated) => {
+            const nextHistory = matchHistory.map(m => m.id === updated.id ? updated : m);
+            setMatchHistory(nextHistory);
+            setStats(generateWarRoomStats(nextHistory));
+            setEditingMatch(null);
+          }}
+        />
+      )}
     </div>
   )
 }

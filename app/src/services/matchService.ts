@@ -446,3 +446,20 @@ export async function getUniqueTracksForGame(game: string) {
   }
 }
 
+export async function updateMatchMetadata(matchId: string, updatedStats: any) {
+  try {
+    const { data, error } = await supabase
+      .from('match_history')
+      .update({ stats: updatedStats })
+      .eq('id', matchId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return { success: true, data }
+  } catch (err: any) {
+    handleServiceError(err, 'matchService');
+    return { success: false, error: err }
+  }
+}
+

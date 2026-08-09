@@ -742,3 +742,19 @@ export async function getPredictions(tournamentId: string) {
   return { data, error };
 }
 
+export async function removeParticipant(tournamentId: string, participantId: string) {
+  try {
+    const { error } = await supabase
+      .from('tournament_participants')
+      .delete()
+      .eq('tournament_id', tournamentId)
+      .eq('participant_id', participantId);
+
+    if (error) throw error;
+    return { success: true, error: null };
+  } catch (err: any) {
+    handleServiceError(err, 'tournamentService');
+    return { success: false, error: err };
+  }
+}
+

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getTournaments, getTournamentMatches, calculateStandings, updateMatchScore, registerForTournament, checkRegistration, startTournament, submitPrediction, getPredictions } from '../services/tournamentService'
+import { getTournaments, getTournamentMatches, calculateStandings, updateMatchScore, registerForTournament, checkRegistration, startTournament, submitPrediction, getPredictions, getTournamentRegistrations, removeParticipant } from '../services/tournamentService'
 import type { Tournament, TournamentMatch } from '../services/tournamentService'
 import { getActiveCircuits } from '../services/circuitService'
 import type { Circuit } from '../services/circuitService'
 import { useAuth } from '../context/AuthContext'
+import type { Profile } from '../context/AuthContext'
+import { getAllProfiles } from '../services/profileService'
 import { Trophy, Calendar, Users, ChevronRight, Swords, GitMerge, List, Play, Edit3, X, ChevronLeft, Shield, CheckCircle, Trash2, Crosshair, Plus } from 'lucide-react'
 import Button from '../components/Button'
 import toast from 'react-hot-toast'
@@ -180,6 +182,18 @@ export default function Tournaments() {
   const [reportingMatch, setReportingMatch] = useState<TournamentMatch | null>(null)
   const [gameResults, setGameResults] = useState<{winner: 'p1'|'p2'|null, p1Perfect: boolean, p2Perfect: boolean}[]>([{ winner: null, p1Perfect: false, p2Perfect: false }]);
 
+  // Roster & Admin Creation State
+  const [rosterRegistrations, setRosterRegistrations] = useState<any[]>([])
+  const [loadingRoster, setLoadingRoster] = useState(false)
+  const [allProfiles, setAllProfiles] = useState<Profile[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedProfileId, setSelectedProfileId] = useState('')
+  const [newUsername, setNewUsername] = useState('')
+  const [newMmr, setNewMmr] = useState(1000)
+  const [newUsr, setNewUsr] = useState(1000)
+  const [addingPlayer, setAddingPlayer] = useState(false)
+
+
   useEffect(() => {
     let cancelled = false
     Promise.all([
@@ -196,18 +210,32 @@ export default function Tournaments() {
     return () => { cancelled = true }
   }, [])
 
+  const fetchRoster = async (tId: string) => {
+    setLoadingRoster(true)
+    const { data } = await getTournamentRegistrations(tId)
+    setRosterRegistrations(data || [])
+    setLoadingRoster(false)
+  }
+
   useEffect(() => {
      if (viewingTournamentId) {
         getTournamentMatches(viewingTournamentId).then((res: { data: TournamentMatch[] }) => {
            setTournamentMatches(res.data || [])
         })
+        fetchRoster(viewingTournamentId)
         if (user) {
            checkRegistration(viewingTournamentId, user.id).then(res => {
               setIsRegistered(res.isRegistered)
            })
         }
+        if (isAdmin) {
+           getAllProfiles().then(res => {
+              setAllProfiles(res.data || [])
+           })
+        }
      }
-  }, [viewingTournamentId, user])
+  }, [viewingTournamentId, user, isAdmin])
+
 
   const handleReportSubmit = async () => {
     if (!reportingMatch) return
@@ -244,8 +272,77 @@ export default function Tournaments() {
     if (success) {
       toast.success("REGISTRATION CONFIRMED")
       setIsRegistered(true)
+      fetchRoster(viewingTournamentId)
     } else {
       toast.error("Registration failed: " + error?.message)
+    }
+  }
+
+  const handleAddExistingPlayer = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!viewingTournamentId || !selectedProfileId) return
+    setAddingPlayer(true)
+    const { success, error } = await registerForTournament(viewingTournamentId, selectedProfileId)
+    setAddingPlayer(false)
+    if (success) {
+      toast.success("PLAYER ADDED TO ROSTER")
+      setSelectedProfileId('')
+      setSearchQuery('')
+      fetchRoster(viewingTournamentId)
+    } else {
+      toast.error("Failed to add player: " + error?.message)
+    }
+  }
+
+  const handleCreateManualPlayer = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!viewingTournamentId || !newUsername) return
+    setAddingPlayer(true)
+    
+    // Call custom RPC create_manual_player
+    const { data: newUserId, error: createError } = await supabase.rpc('create_manual_player', {
+      p_username: newUsername,
+      p_mmr: newMmr,
+      p_usr: newUsr
+    })
+
+    if (createError) {
+      toast.error("Failed to create manual player: " + createError.message)
+      setAddingPlayer(false)
+      return
+    }
+
+    // Now register the new player
+    const { success, error: regError } = await registerForTournament(viewingTournamentId, newUserId)
+    setAddingPlayer(false)
+    if (success) {
+      toast.success(`PLAYER ${newUsername} CREATED & REGISTERED`)
+      setNewUsername('')
+      setNewMmr(1000)
+      setNewUsr(1000)
+      fetchRoster(viewingTournamentId)
+      // Also update the list of profiles so they show up in the dropdown
+      getAllProfiles().then(res => {
+         setAllProfiles(res.data || [])
+      })
+    } else {
+      toast.error("Failed to register created player: " + regError?.message)
+    }
+  }
+
+  const handleRemovePlayer = async (playerId: string, username: string) => {
+    if (!viewingTournamentId) return
+    if (!window.confirm(`Are you sure you want to remove Operator ${username} from the tournament roster?`)) return
+    
+    const { success, error } = await removeParticipant(viewingTournamentId, playerId)
+    if (success) {
+      toast.success(`Operator ${username} removed.`)
+      fetchRoster(viewingTournamentId)
+      if (user && playerId === user.id) {
+         setIsRegistered(false)
+      }
+    } else {
+      toast.error("Failed to remove participant: " + error?.message)
     }
   }
 
@@ -644,77 +741,211 @@ export default function Tournaments() {
                        )}
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center py-40 text-center animate-in zoom-in-95 duration-500">
-                       <div className="w-32 h-32 rounded-full bg-steel-900 border border-steel-800 relative flex items-center justify-center mb-8 shadow-2xl">
-                          <div className="absolute inset-0 rounded-full border-2 border-dashed border-nexus-500 opacity-20 animate-spin-slow"></div>
-                          <Trophy size={60} className="text-ink-700 group-hover:scale-110 transition-transform" />
-                       </div>
-                       <h3 className="text-4xl font-display font-black text-ink-50 mb-3 uppercase tracking-tighter">Registration Channel Open</h3>
-                       <p className="text-ink-400 font-mono text-sm uppercase tracking-widest max-w-sm mx-auto mb-10">Awaiting participants for full tactical deployment.</p>
-                       <div className="flex gap-6">
-                          <Button variant="secondary" onClick={() => setViewingTournamentId(null)} className="px-8 min-w-[160px]">TERMINATE VIEW</Button>
-                          {isAdmin && (
-                            <Button 
-                               variant="primary" 
-                               onClick={async () => {
-                                  const res = await startTournament(viewingTournament.id);
-                                  if (res.success) {
-                                     toast.success("TOURNAMENT STARTED");
-                                     setViewingTournamentId(null);
-                                     const tours = await getTournaments(['upcoming', 'active', 'completed']);
-                                     setTournaments(tours.data || []);
-                                  } else {
-                                     toast.error(res.error?.message || "Failed to start");
-                                  }
-                               }}
-                               className="px-10 min-w-[160px] italic font-black tracking-widest bg-victory-500 text-steel-950 hover:bg-victory-400"
-                            >
-                               START TOURNAMENT
-                            </Button>
-                          )}
-                           <Button 
-                             variant="primary" 
-                             disabled={isRegistered || registering}
-                             onClick={handleRegister}
-                             className="px-10 min-w-[160px] italic font-black tracking-widest bg-nexus-500 text-steel-950 hover:bg-nexus-400"
-                          >
-                             {registering ? 'ENROLLING...' : isRegistered ? (
-                                <span className="flex items-center gap-2"><CheckCircle size={16} /> DEPLOYED</span>
-                             ) : 'ENGAGE OPS'}
-                          </Button>
+                    <div className="animate-in fade-in duration-500 space-y-12">
+                       {/* Header Info */}
+                       <div className="text-center max-w-2xl mx-auto">
+                          <div className="w-20 h-20 rounded-2xl bg-steel-900 border border-steel-800 relative flex items-center justify-center mx-auto mb-6 shadow-xl">
+                             <div className="absolute inset-0 rounded-2xl border border-dashed border-nexus-500/30 animate-spin-slow"></div>
+                             <Trophy size={36} className="text-nexus-400" />
+                          </div>
+                          <h3 className="text-3xl font-display font-black text-ink-50 mb-2 uppercase tracking-tighter italic">Registration Channel Open</h3>
+                          <p className="text-ink-500 font-mono text-xs uppercase tracking-widest">
+                             {viewingTournament.is_manual ? 'Manually Operated Sector engagement' : 'Awaiting participants for tactical deployment'}
+                          </p>
                        </div>
 
-                       {/* Pick'em UI for non-participants */}
-                       {!isRegistered && (
-                         <div className="mt-16 bg-steel-900/50 border border-steel-800 rounded-2xl p-8 max-w-2xl mx-auto">
-                            <h4 className="text-xl font-display uppercase tracking-widest text-nexus-400 flex items-center justify-center gap-3 mb-6">
-                              <Crosshair size={20} /> Spectator Pick'em
-                            </h4>
-                            <p className="text-ink-400 font-mono text-xs uppercase tracking-widest mb-6">Predict the champion. Earn 150 Career XP if your intel is correct.</p>
-                            <div className="flex items-center justify-center gap-4">
-                              <Button 
-                                variant="secondary" 
-                                onClick={async () => {
-                                  const name = window.prompt("Enter the exact operator name of your predicted champion:");
-                                  if (name) {
-                                    // Fetch user ID
-                                    const { data: p } = await supabase.from('profiles').select('id').eq('username', name).single();
-                                    if (p && user) {
-                                      const res = await submitPrediction(viewingTournament.id, user.id, p.id);
-                                      if (res.success) toast.success("PREDICTION LOCKED");
-                                      else toast.error("Prediction failed or already locked.");
-                                    } else {
-                                      toast.error("Operator not found.");
-                                    }
-                                  }
-                                }}
-                                className="px-8 font-bold text-[10px] tracking-widest uppercase border-nexus-500/50 hover:border-nexus-500 hover:text-nexus-400 transition-colors"
-                              >
-                                Lock Prediction
-                              </Button>
-                            </div>
-                         </div>
-                       )}
+                       {/* Two Column Layout: Left Column = Roster, Right Column = Admin Controls */}
+                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                          {/* Roster Column */}
+                          <div className="lg:col-span-2 space-y-6">
+                             <div className="flex justify-between items-center border-b border-steel-800 pb-3">
+                                <h4 className="text-sm font-display font-bold text-ink-100 uppercase tracking-[0.2em] flex items-center gap-2">
+                                   <Users size={16} className="text-nexus-500" /> Registered Operators ({rosterRegistrations.length})
+                                </h4>
+                             </div>
+
+                             {loadingRoster ? (
+                                <div className="py-12 text-center text-ink-600 font-mono text-xs uppercase animate-pulse">Scanning Roster...</div>
+                             ) : rosterRegistrations.length === 0 ? (
+                                <div className="py-12 text-center text-ink-600 font-mono text-xs uppercase border border-dashed border-steel-800 rounded-xl bg-steel-950/20">No Operators deployed yet.</div>
+                             ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                   {rosterRegistrations.map((reg) => (
+                                      <div key={reg.id} className="flex justify-between items-center p-4 bg-steel-900/50 border border-steel-800 rounded-2xl hover:border-steel-700 transition-colors">
+                                         <div>
+                                            <div className="text-sm font-bold text-ink-100">{reg.profiles?.username}</div>
+                                            <div className="text-[10px] font-mono text-ink-500 uppercase mt-0.5">MMR: {reg.profiles?.mmr}</div>
+                                         </div>
+                                         <div className="flex items-center gap-2">
+                                            {isAdmin && (
+                                               <button 
+                                                  onClick={() => handleRemovePlayer(reg.participant_id, reg.profiles?.username || 'Operator')}
+                                                  className="p-2 bg-threat-950/30 hover:bg-threat-900/50 border border-threat-900/30 hover:border-threat-500/50 rounded-xl text-threat-400 hover:text-threat-200 transition-all active:scale-95"
+                                                  title="Remove operator from roster"
+                                               >
+                                                  <Trash2 size={14} />
+                                               </button>
+                                            )}
+                                         </div>
+                                      </div>
+                                   ))}
+                                </div>
+                             )}
+
+                             {/* Self Registration Actions */}
+                             <div className="flex gap-4 pt-4 justify-start">
+                                <Button 
+                                   variant="primary" 
+                                   disabled={isRegistered || registering}
+                                   onClick={handleRegister}
+                                   className="px-8 italic font-black tracking-widest bg-nexus-500 text-steel-950 hover:bg-nexus-400"
+                                >
+                                   {registering ? 'ENROLLING...' : isRegistered ? (
+                                      <span className="flex items-center gap-2"><CheckCircle size={16} /> DEPLOYED</span>
+                                   ) : 'ENGAGE OPS (SELF-REGISTER)'}
+                                </Button>
+
+                                {isAdmin && (
+                                   <Button 
+                                      variant="primary" 
+                                      disabled={rosterRegistrations.length < 2}
+                                      onClick={async () => {
+                                         const res = await startTournament(viewingTournament.id);
+                                         if (res.success) {
+                                            toast.success("TOURNAMENT STARTED");
+                                            setViewingTournamentId(null);
+                                            const tours = await getTournaments(['upcoming', 'active', 'completed']);
+                                            setTournaments(tours.data || []);
+                                         } else {
+                                            toast.error(res.error?.message || "Failed to start");
+                                         }
+                                      }}
+                                      className="px-8 italic font-black tracking-widest bg-victory-500 text-steel-950 hover:bg-victory-400 disabled:opacity-50"
+                                   >
+                                      START TOURNAMENT
+                                   </Button>
+                                )}
+                             </div>
+                          </div>
+
+                          {/* Admin Controls Column */}
+                          {isAdmin ? (
+                             <div className="space-y-6 bg-steel-900/30 border border-steel-800 p-6 rounded-2xl">
+                                <div className="border-b border-steel-800 pb-3">
+                                   <h4 className="text-xs font-display font-bold text-nexus-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                      <Shield size={14} className="text-nexus-400" /> Admin Deployment Tools
+                                   </h4>
+                                </div>
+
+                                {/* Add Existing Player */}
+                                <form onSubmit={handleAddExistingPlayer} className="space-y-3">
+                                   <label className="text-[10px] font-mono text-ink-500 uppercase tracking-wider font-bold">Add Existing Operator</label>
+                                   <div className="relative">
+                                      <select
+                                         value={selectedProfileId}
+                                         onChange={(e) => setSelectedProfileId(e.target.value)}
+                                         className="w-full bg-steel-950 border border-steel-700 rounded-xl p-3 text-ink-100 font-body text-sm appearance-none focus:outline-none focus:border-nexus-500 transition-colors"
+                                      >
+                                         <option value="">-- SELECT OPERATOR --</option>
+                                         {allProfiles
+                                            .filter(p => !rosterRegistrations.some(r => r.participant_id === p.id))
+                                            .map(p => (
+                                               <option key={p.id} value={p.id}>
+                                                  {p.username} (MMR: {p.mmr})
+                                               </option>
+                                            ))
+                                         }
+                                      </select>
+                                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-ink-500 font-mono text-xs">▼</div>
+                                   </div>
+                                   <Button 
+                                      type="submit" 
+                                      variant="secondary" 
+                                      disabled={!selectedProfileId || addingPlayer} 
+                                      className="w-full font-bold uppercase tracking-widest text-[10px] py-3 bg-steel-950 hover:bg-steel-800"
+                                   >
+                                      {addingPlayer ? 'DEPLOYING...' : 'DEPLOY OPERATOR'}
+                                   </Button>
+                                </form>
+
+                                <div className="h-px bg-steel-800"></div>
+
+                                {/* Create & Add New Player */}
+                                <form onSubmit={handleCreateManualPlayer} className="space-y-4">
+                                   <label className="text-[10px] font-mono text-ink-500 uppercase tracking-wider font-bold block mb-1">Create & Add New Player</label>
+                                   <div className="space-y-3">
+                                      <input
+                                         required
+                                         type="text"
+                                         placeholder="Operator Username"
+                                         value={newUsername}
+                                         onChange={(e) => setNewUsername(e.target.value)}
+                                         className="w-full bg-steel-950 border border-steel-700 rounded-xl p-3 text-ink-100 font-body text-sm focus:outline-none focus:border-nexus-500 transition-colors"
+                                      />
+                                      <div className="grid grid-cols-2 gap-3">
+                                         <div>
+                                            <label className="text-[9px] font-mono text-ink-600 uppercase block mb-1">Start MMR</label>
+                                            <input
+                                               type="number"
+                                               value={newMmr}
+                                               onChange={(e) => setNewMmr(parseInt(e.target.value) || 1000)}
+                                               className="w-full bg-steel-950 border border-steel-700 rounded-xl p-3 text-ink-100 font-mono text-xs text-center"
+                                            />
+                                         </div>
+                                         <div>
+                                            <label className="text-[9px] font-mono text-ink-600 uppercase block mb-1">Start USR</label>
+                                            <input
+                                               type="number"
+                                               value={newUsr}
+                                               onChange={(e) => setNewUsr(parseInt(e.target.value) || 1000)}
+                                               className="w-full bg-steel-950 border border-steel-700 rounded-xl p-3 text-ink-100 font-mono text-xs text-center"
+                                            />
+                                         </div>
+                                      </div>
+                                   </div>
+                                   <Button 
+                                      type="submit" 
+                                      variant="primary" 
+                                      disabled={addingPlayer}
+                                      className="w-full font-black uppercase tracking-widest text-[10px] py-3 italic bg-nexus-500 text-steel-950 hover:bg-nexus-400"
+                                   >
+                                      {addingPlayer ? 'ESTABLISHING...' : 'CREATE & DEPLOY'}
+                                   </Button>
+                                </form>
+                             </div>
+                          ) : (
+                             <div className="space-y-6">
+                                {/* Pick'em UI for non-participants */}
+                                {!isRegistered && (
+                                   <div className="bg-steel-900/50 border border-steel-800 rounded-2xl p-6">
+                                      <h4 className="text-lg font-display uppercase tracking-widest text-nexus-400 flex items-center gap-3 mb-4 italic">
+                                         <Crosshair size={18} /> Spectator Pick'em
+                                      </h4>
+                                      <p className="text-ink-500 font-mono text-[10px] uppercase tracking-wider mb-6">Predict the champion. Earn 150 Career XP if your intel is correct.</p>
+                                      <Button 
+                                         variant="secondary" 
+                                         onClick={async () => {
+                                            const name = window.prompt("Enter the exact operator name of your predicted champion:");
+                                            if (name) {
+                                               const { data: p } = await supabase.from('profiles').select('id').eq('username', name).single();
+                                               if (p && user) {
+                                                  const res = await submitPrediction(viewingTournament.id, user.id, p.id);
+                                                  if (res.success) toast.success("PREDICTION LOCK CONFIRMED");
+                                                  else toast.error("Prediction lock failed or already locked.");
+                                               } else {
+                                                  toast.error("Operator not found in roster.");
+                                               }
+                                            }
+                                         }}
+                                         className="w-full font-bold text-[10px] tracking-widest uppercase border-nexus-500/50 hover:border-nexus-500 hover:text-nexus-400 transition-colors py-3"
+                                      >
+                                         Lock Prediction
+                                      </Button>
+                                   </div>
+                                )}
+                             </div>
+                          )}
+                       </div>
                     </div>
                   )}
               </div>
